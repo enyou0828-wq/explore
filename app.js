@@ -488,111 +488,143 @@ function donePts(t) {
   const e = S.exps[t.id]; if (!e) return 0; return e.done ? 3 : Math.min(3, (e.steps || []).filter(Boolean).length);
 }
 const pts = t => (S.viewed[t.id] ? 1 : 0) + (S.saved[t.id] ? 1 : 0) + donePts(t);
+// 16 個興趣分枝：一個主題有幾個興趣標籤，就出現在幾個分枝（點數共用）
+const BRANCH_ORDER = ['sci', 'tech', 'biz', 'psych', 'phil', 'lang', 'hist', 'art', 'photo', 'media', 'music', 'craft', 'food', 'health', 'sport', 'nature'];
+const BRANCH_COL = { sci: '#2f5d8a', tech: '#4a6fa5', biz: '#7a6a2f', psych: '#8a4f7d', phil: '#5b4b8a', lang: '#3d7f8c', hist: '#8c5a3c', art: '#b4532a', photo: '#c47f2c', media: '#a33f4f', music: '#b05f8a', craft: '#8f6e4a', food: '#c0632f', health: '#4f8a5b', sport: '#2f7f6f', nature: '#55632b' };
 let treeCache = null;
 function buildTree() {
   if (treeCache) return treeCache;
   const out = {};
-  for (const cat of Object.keys(CATS)) {
-    // 沿著「相關主題」從入門主題往外長（廣度優先）：每個節點的上一層就是它的相關主題
-    const list = TOPICS.filter(t => t.cat === cat);
-    const byId = Object.fromEntries(list.map(t => [t.id, t]));
-    const nb = id => list.filter(x => x.id !== id && (byId[id].related.includes(x.id) || x.related.includes(id)));
-    const roots = list.filter(t => t.diff === 1).sort((a, b) => nb(b.id).length - nb(a.id).length).slice(0, 4);
-    const parent = {}, depth = {}, fallback = [];
-    roots.forEach(r => { parent[r.id] = null; depth[r.id] = 0; });
-    let frontier = roots.map(r => r.id);
-    while (frontier.length) {
-      const next = [];
-      for (const id of frontier) for (const x of nb(id)) if (!(x.id in depth)) { depth[x.id] = depth[id] + 1; parent[x.id] = id; next.push(x.id); }
-      frontier = next;
+  for (const tag of BRANCH_ORDER) {
+    const list = TOPICS.filter(t => t.tags.includes(tag));
+    const ids = new Set(list.map(t => t.id));
+    const nb = t => list.filter(x => x.id !== t.id && (t.related.includes(x.id) || x.related.includes(t.id)));
+    const parent = {}, depth = {};
+    // 沿著相關主題往外長：每個連通群組從最入門的主題開始，接到分枝根部
+    const order = list.slice().sort((a, b) => a.diff - b.diff || nb(b).length - nb(a).length);
+    for (const root of order) {
+      if (root.id in depth) continue;
+      parent[root.id] = null; depth[root.id] = 0;
+      let frontier = [root];
+      while (frontier.length) {
+        const next = [];
+        for (const t of frontier) for (const x of nb(t)) if (!(x.id in depth)) { depth[x.id] = depth[t.id] + 1; parent[x.id] = t.id; next.push(x); }
+        frontier = next;
+      }
     }
-    // 和同類主題完全沒有相關連結的，接到分枝根部
-    list.forEach(t => { if (!(t.id in depth)) { depth[t.id] = 0; parent[t.id] = null; fallback.push(t.id); } });
     const tiers = [];
     list.forEach(t => (tiers[depth[t.id]] = tiers[depth[t.id]] || []).push(t));
-    // 每層依父節點的位置排序，減少交叉
-    const pos = {};
+    const posKey = {};
     tiers.forEach(tier => {
-      tier.sort((a, b) => (parent[a.id] ? pos[parent[a.id]] : 0.5) - (parent[b.id] ? pos[parent[b.id]] : 0.5) || a.diff - b.diff);
-      tier.forEach((t, j) => pos[t.id] = tier.length > 1 ? j / (tier.length - 1) : 0.5);
+      tier.sort((a, b) => (parent[a.id] ? posKey[parent[a.id]] : 0.5) - (parent[b.id] ? posKey[parent[b.id]] : 0.5));
+      tier.forEach((t, j) => posKey[t.id] = tier.length > 1 ? j / (tier.length - 1) : 0.5);
     });
-    out[cat] = { tiers, parent, fallback };
+    out[tag] = { tiers, parent, ids };
   }
   return (treeCache = out);
 }
-const BR = { knowledge: { ang: -145, col: 'var(--k)' }, hobby: { ang: -90, col: 'var(--h)' }, experience: { ang: -35, col: 'var(--e)' } };
-function treeRows(cat, maxPerRow = 6) {
-  const rows = [];
-  // 同一層超過 maxPerRow 個就上下交錯成兩排
-  buildTree()[cat].tiers.forEach(tier => { if (tier.length <= maxPerRow) rows.push(tier); else { rows.push(tier.filter((_, j) => j % 2 === 0)); rows.push(tier.filter((_, j) => j % 2 === 1)); } });
+const branchPts = tag => TOPICS.filter(t => t.tags.includes(tag)).reduce((s, t) => s + pts(t), 0);
+
+// 把一層拆成多排：每排最多 cap 個
+function rowsOf(tiers, capAt) {
+  const rows = []; let k = 0;
+  tiers.forEach(tier => {
+    let rest = tier.slice();
+    while (rest.length) { const cap = Math.max(1, capAt(k)); rows.push(rest.splice(0, cap)); k++; }
+  });
   return rows;
 }
-const ROW = 80;
-function layoutBranch(cat, ox, oy, ang, gap = 58) {
-  const { tiers, parent } = buildTree()[cat];
-  const a = ang * Math.PI / 180, dx = Math.cos(a), dy = Math.sin(a), px = -dy, py = dx;
-  const pos = { ['hub-' + cat]: { x: ox, y: oy } };
-  treeRows(cat).forEach((row, k) => {
-    const r = 70 + (k + 1) * ROW;
-    row.forEach((t, j) => { const off = (j - (row.length - 1) / 2) * gap; pos[t.id] = { x: ox + dx * r + px * off, y: oy + dy * r + py * off }; });
+// 放射狀：每個分枝佔 360/16 度；每排的容量依半徑計算，保證和相鄰分枝的節點不重疊
+function layoutRadial(cx, cy) {
+  const T = buildTree(), pos = {}, HUB = 150, R0 = 230, ROW = 58, NODE = 48;
+  const sector = 2 * Math.PI / BRANCH_ORDER.length;
+  let maxR = 0;
+  BRANCH_ORDER.forEach((tag, i) => {
+    const th = -Math.PI / 2 + i * sector;
+    pos['hub-' + tag] = { x: cx + HUB * Math.cos(th), y: cy + HUB * Math.sin(th), th };
+    const rows = rowsOf(T[tag].tiers, k => Math.floor((R0 + k * ROW) * sector / NODE));
+    rows.forEach((row, k) => {
+      const r = R0 + k * ROW; maxR = Math.max(maxR, r);
+      const step = NODE / r;
+      // 交錯排的節點稍微錯開，避免和上一排對齊時徽章重疊
+      const shift = (k % 2 && row.length < Math.floor(r * sector / NODE)) ? step / 2 : 0;
+      row.forEach((t, j) => { const a = th + (j - (row.length - 1) / 2) * step + shift; pos[tag + ':' + t.id] = { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }; });
+    });
   });
-  return { pos, tiers, parent };
+  return { pos, maxR };
 }
-let treeSel = null, treeBranch = 'knowledge';
+// 單一分枝（手機）：從下往上長
+function layoutSingle(tag, W) {
+  const T = buildTree()[tag], pos = {}, ROW = 80, GAP = 64;
+  const rows = rowsOf(T.tiers, () => 6);
+  const oy = 110 + rows.length * ROW;
+  pos['hub-' + tag] = { x: W / 2, y: oy };
+  rows.forEach((row, k) => row.forEach((t, j) => { pos[tag + ':' + t.id] = { x: W / 2 + (j - (row.length - 1) / 2) * GAP, y: oy - 70 - (k + 1) * ROW + 40 }; }));
+  return { pos, H: oy + 90 };
+}
+
+let treeSel = null, treeBranch = null, treeFocus = false;
+function nodeSvg(tag, t, p, col, dim) {
+  const T = buildTree()[tag];
+  const n = pts(t), par = T.parent[t.id] ? TOPICS.find(x => x.id === T.parent[t.id]) : null;
+  const locked = n === 0 && par && pts(par) === 0;
+  const st = n >= 5 ? 'full' : n > 0 ? 'part' : locked ? 'locked' : 'open';
+  return `<g class="node ${st} ${treeSel === t.id ? 'sel' : ''} ${dim ? 'dim' : ''}" data-node="${t.id}" tabindex="0" role="button" aria-label="${esc(INT[tag])}：${esc(t.title)}，${n}/5" style="--c:${col}" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})">
+    <circle r="21" class="ring"/>
+    <g transform="translate(-10.5 -10.5)" class="ic">${icon(t.id, 21).replace('<svg ', '<svg x="0" y="0" ')}</g>
+    <g transform="translate(0 30)"><rect x="-14" y="-7.5" width="28" height="15" rx="7.5" class="badge"/><text y="4" text-anchor="middle">${n}/5</text></g>
+    ${locked ? `<g transform="translate(-22 12)" class="lock"><rect x="-5" y="-2" width="10" height="8" rx="1.5"/><path d="M-3 -2v-2a3 3 0 0 1 6 0v2" fill="none"/></g>` : ''}
+    <title>${esc(INT[tag])}・${esc(t.title)}</title>
+  </g>`;
+}
 function renderTree(box) {
   if (!box) return;
-  const narrow = box.clientWidth < 720;
-  const cats = narrow ? [treeBranch] : Object.keys(CATS);
-  const lays = {};
-  let W, H;
-  const maxRows = Math.max(...cats.map(c => treeRows(c).length));
-  const oy = 110 + maxRows * ROW;
-  if (narrow) { W = 440; H = oy + 90; lays[treeBranch] = layoutBranch(treeBranch, 220, oy, -90, 66); }
-  else { W = 1200; H = oy + 210; const cx = { knowledge: 220, hobby: 600, experience: 980 }, an = { knowledge: -93, hobby: -90, experience: -87 }; cats.forEach(c => lays[c] = layoutBranch(c, cx[c], oy, an[c], 62)); }
+  const narrow = box.clientWidth < 720 || treeFocus;
+  const mine = new Set(S.profile?.interests || []);
+  const T = buildTree();
+  if (!treeBranch) treeBranch = BRANCH_ORDER.find(t => mine.has(t)) || 'sci';
   const lines = [], nodes = [], hubs = [];
+  let vb;
   if (!narrow) {
+    const C = 900, { pos, maxR } = layoutRadial(C, C);
+    const ext = maxR + 70;
+    vb = `${C - ext} ${C - ext} ${ext * 2} ${ext * 2}`;
+    BRANCH_ORDER.forEach(tag => {
+      const col = BRANCH_COL[tag], dim = !mine.has(tag) && branchPts(tag) === 0;
+      const h = pos['hub-' + tag];
+      lines.push(`<line x1="${C}" y1="${C}" x2="${h.x}" y2="${h.y}" stroke="${col}" stroke-width="2" opacity="${dim ? 0.3 : 0.8}"/>`);
+      T[tag].tiers.flat().forEach(t => {
+        const p = pos[tag + ':' + t.id], pp = T[tag].parent[t.id] ? pos[tag + ':' + T[tag].parent[t.id]] : h;
+        const lit = pts(t) > 0;
+        lines.push(`<line x1="${pp.x.toFixed(1)}" y1="${pp.y.toFixed(1)}" x2="${p.x.toFixed(1)}" y2="${p.y.toFixed(1)}" stroke="${lit ? col : 'var(--line)'}" stroke-width="${lit ? 3 : 1.4}" opacity="${dim ? 0.45 : 1}"/>`);
+        nodes.push(nodeSvg(tag, t, p, col, dim));
+      });
+      const total = branchPts(tag);
+      hubs.push(`<g class="hub ${dim ? 'dim' : ''} ${tag === treeBranch ? '' : ''}" style="--c:${col}" transform="translate(${h.x.toFixed(1)} ${h.y.toFixed(1)})" data-hub="${tag}" tabindex="0" role="button" aria-label="放大看${esc(INT[tag])}分枝">
+        <circle r="30" class="ring"/><text y="-2" text-anchor="middle" class="hn">${esc(INT[tag])}</text><text y="13" text-anchor="middle" class="hv">${total} 點・Lv ${Math.floor(total / 10)}</text>
+        <title>${esc(INT[tag])}：${T[tag].tiers.flat().length} 個主題</title></g>`);
+    });
     const tot = TOPICS.reduce((s, t) => s + pts(t), 0);
-    const yy = oy + 160, hb = oy + 86;
-    cats.forEach(c => { const hx = lays[c].pos['hub-' + c].x; lines.push(hx === 600 ? `<path d="M600 ${yy} V ${hb}" stroke="${BR[c].col}" stroke-width="2.5"/>` : `<path d="M600 ${yy} C ${(600 + hx) / 2} ${yy}, ${hx} ${yy - 10}, ${hx} ${hb}" fill="none" stroke="${BR[c].col}" stroke-width="2.5"/>`); });
-    hubs.push(`<g class="hub you" transform="translate(600 ${yy})"><circle r="24" class="ring"/><text y="5" text-anchor="middle" class="yt">你</text><text y="44" text-anchor="middle" class="hs">總共 ${tot} 點</text></g>`);
-  }
-  for (const c of cats) {
-    const { pos, tiers, parent } = lays[c];
-    const col = BR[c].col;
-    const all = tiers.flat();
-    const total = all.reduce((s, t) => s + pts(t), 0);
-    for (const t of all) {
-      const p = parent[t.id] ? pos[parent[t.id]] : pos['hub-' + c];
+    hubs.push(`<g class="hub you" transform="translate(${C} ${C})"><circle r="44" class="ring"/><text y="-2" text-anchor="middle" class="yt">你</text><text y="18" text-anchor="middle" class="hs">${tot} 點</text></g>`);
+  } else {
+    const W = 440, { pos, H } = layoutSingle(treeBranch, W);
+    vb = `0 0 ${W} ${H}`;
+    const tag = treeBranch, col = BRANCH_COL[tag], h = pos['hub-' + tag];
+    T[tag].tiers.flat().forEach(t => {
+      const p = pos[tag + ':' + t.id], pp = T[tag].parent[t.id] ? pos[tag + ':' + T[tag].parent[t.id]] : h;
       const lit = pts(t) > 0;
-      lines.push(`<line x1="${p.x}" y1="${p.y}" x2="${pos[t.id].x}" y2="${pos[t.id].y}" stroke="${lit ? col : 'var(--line)'}" stroke-width="${lit ? 3 : 1.5}"/>`);
-    }
-    for (const t of all) {
-      const n = pts(t), par = parent[t.id] ? TOPICS.find(x => x.id === parent[t.id]) : null;
-      const locked = n === 0 && par && pts(par) === 0;
-      const { x, y } = pos[t.id];
-      const st = n >= 5 ? 'full' : n > 0 ? 'part' : locked ? 'locked' : 'open';
-      nodes.push(`<g class="node ${st} ${treeSel === t.id ? 'sel' : ''}" data-node="${t.id}" tabindex="0" role="button" aria-label="${esc(t.title)}，${n}/5${locked ? '，尚未點亮' : ''}" style="--c:${col}" transform="translate(${x} ${y})">
-        <circle r="22" class="ring"/>
-        <g transform="translate(-11 -11)" class="ic">${icon(t.id, 22).replace('<svg ', '<svg x="0" y="0" ')}</g>
-        <g transform="translate(0 33)"><rect x="-15" y="-8" width="30" height="16" rx="8" class="badge"/><text y="4" text-anchor="middle">${n}/5</text></g>
-        ${locked ? `<g transform="translate(-24 12)" class="lock"><rect x="-5" y="-2" width="10" height="8" rx="1.5"/><path d="M-3 -2v-2a3 3 0 0 1 6 0v2" fill="none"/></g>` : ''}
-        <title>${esc(t.title)}</title>
-      </g>`);
-    }
-    const h = pos['hub-' + c];
-    const lv = Math.floor(total / 10);
-    hubs.push(`<g class="hub" style="--c:${col}" transform="translate(${h.x} ${h.y})">
-      <circle r="30" class="ring"/><g transform="translate(-13 -13)" class="ic">${icon(c, 26).replace('<svg ', '<svg x="0" y="0" ')}</g>
-      <text y="${narrow ? 50 : 50}" text-anchor="middle" class="hl">${CATS[c].en}</text>
-      <text y="${narrow ? 70 : 72}" text-anchor="middle" class="hp">${total}<tspan class="hs"> 點 · Lv ${lv}</tspan></text>
-    </g>`);
+      lines.push(`<line x1="${pp.x}" y1="${pp.y}" x2="${p.x}" y2="${p.y}" stroke="${lit ? col : 'var(--line)'}" stroke-width="${lit ? 3 : 1.5}"/>`);
+      nodes.push(nodeSvg(tag, t, p, col, false));
+    });
+    const total = branchPts(tag);
+    hubs.push(`<g class="hub" style="--c:${col}" transform="translate(${h.x} ${h.y})"><circle r="32" class="ring"/><text y="-2" text-anchor="middle" class="hn">${esc(INT[tag])}</text><text y="13" text-anchor="middle" class="hv">Lv ${Math.floor(total / 10)}</text><text y="54" text-anchor="middle" class="hp">${total}<tspan class="hs"> 點</tspan></text></g>`);
   }
   const sel = treeSel && TOPICS.find(t => t.id === treeSel);
   box.innerHTML = `
-    ${narrow ? `<div class="filters treetabs">${Object.entries(CATS).map(([k, c]) => `<button class="chip ${k === treeBranch ? 'on' : ''}" data-br="${k}">${c.en}</button>`).join('')}</div>` : ''}
-    <div class="treewrap"><svg viewBox="0 0 ${W} ${H + 20}" class="tree" role="group" aria-label="技能樹">${lines.join('')}${nodes.join('')}${hubs.join('')}</svg></div>
-    <div class="treelegend"><span><i class="lg full"></i>5/5 完成</span><span><i class="lg part"></i>進行中</span><span><i class="lg open"></i>可以探索</span><span><i class="lg locked"></i>尚未點亮</span><span class="muted">看過 +1、收藏 +1、完成 +3</span></div>
-    <div class="treeinfo">${sel ? (() => { const n = pts(sel), d = donePts(sel); return `<div class="tsel cat-${sel.cat}"><span class="ticon">${icon(sel.id, 26)}</span><div><p class="kicker"><span class="cat">${CATS[sel.cat].en}</span><span>${n}/5</span></p><h3>${esc(sel.title)}</h3>
+    ${narrow ? `<div class="row treebar">${treeFocus ? '<button class="btn" id="treeAll">← 回到全部分枝</button>' : ''}<label class="field treepick">分枝<select id="brsel">${BRANCH_ORDER.map(t => `<option value="${t}" ${t === treeBranch ? 'selected' : ''}>${INT[t]}${mine.has(t) ? ' ★' : ''}（${branchPts(t)} 點）</option>`).join('')}</select></label></div>` : ''}
+    <div class="treewrap"><svg viewBox="${vb}" class="tree ${narrow ? 'focus' : 'radial'}" role="group" aria-label="技能樹">${lines.join('')}${nodes.join('')}${hubs.join('')}</svg></div>
+    <div class="treelegend"><span><i class="lg full"></i>5/5 完成</span><span><i class="lg part"></i>進行中</span><span><i class="lg open"></i>可以探索</span><span><i class="lg locked"></i>尚未點亮</span><span class="muted">看過 +1、收藏 +1、完成 +3・${narrow ? '★ 是你選的興趣' : '淡色分枝是還沒選、也還沒探索的領域・點分枝中心可以放大'}</span></div>
+    <div class="treeinfo">${sel ? (() => { const n = pts(sel), d = donePts(sel); return `<div class="tsel cat-${sel.cat}"><span class="ticon">${icon(sel.id, 26)}</span><div><p class="kicker"><span class="cat">${CATS[sel.cat].en}</span><span>${n}/5</span><span>${sel.tags.map(g => INT[g]).join('・')}</span></p><h3>${esc(sel.title)}</h3>
       <ul class="pts"><li class="${S.viewed[sel.id] ? 'ok' : ''}">看過 +1</li><li class="${S.saved[sel.id] ? 'ok' : ''}">收藏 +1</li><li class="${d ? 'ok' : ''}">${sel.cat === 'knowledge' ? '讀完' : sel.cat === 'hobby' ? '七天挑戰' : '完成體驗'} +${d}/3</li></ul>
       <a class="btn primary" href="#/topic/${sel.id}">前往主題</a></div></div>`; })() : '<p class="muted">點一個節點看詳細進度。</p>'}</div>`;
   $$('[data-node]', box).forEach(g => {
@@ -600,7 +632,9 @@ function renderTree(box) {
     g.addEventListener('click', pick);
     g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
   });
-  $$('[data-br]', box).forEach(b => b.onclick = () => { treeBranch = b.dataset.br; treeSel = null; renderTree(box); });
+  $('#brsel', box)?.addEventListener('change', e => { treeBranch = e.target.value; treeSel = null; renderTree(box); });
+  $('#treeAll', box)?.addEventListener('click', () => { treeFocus = false; renderTree(box); });
+  $$('[data-hub]', box).forEach(g => { const go = () => { treeBranch = g.dataset.hub; treeFocus = true; treeSel = null; renderTree(box); }; g.addEventListener('click', go); g.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
 }
 window.addEventListener('resize', () => { const b = $('#tree'); if (b) renderTree(b); });
 

@@ -277,3 +277,19 @@ svg.tree { display: block; width: 100%; height: auto; }
 .pts li.ok { border-color: var(--c); color: var(--c); }
 .tree .hub.you .ring { fill: var(--ink); stroke: var(--ink); }
 .tree .hub.you .yt { font: 700 16px var(--serif); fill: var(--paper); }
+
+/* 16 分枝放射技能樹 */
+
+.tree .hub[data-hub] { cursor: pointer; }
+.tree .hub[data-hub]:hover .ring, .tree .hub[data-hub]:focus-visible .ring { stroke: var(--gold); stroke-width: 4; }
+.treebar { align-items: end; margin-bottom: 10px; }
+.treebar .treepick { margin-bottom: 0; }
+.tree .hub .hn { font: 700 12px var(--sans); fill: var(--paper); }
+.tree .hub .hv { font: 500 9px var(--sans); fill: var(--paper); opacity: .9; }
+.tree .hub.you .ring { fill: var(--ink); stroke: var(--ink); }
+.tree .hub.you .yt { font: 700 22px var(--serif); fill: var(--paper); }
+.tree .hub.you .hs { font: 500 12px var(--sans); fill: var(--paper); }
+.tree .dim { opacity: .45; }
+.tree .node.dim:hover, .tree .node.dim.sel { opacity: 1; }
+.treepick { max-width: 320px; margin-bottom: 10px; }
+.tree.focus { max-width: 560px; margin: 0 auto; }
