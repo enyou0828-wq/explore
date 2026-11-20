@@ -104,7 +104,7 @@ section + section { margin-top: 40px; }
 .dislist { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
 
 /* Deep Dive */
-.dive { --c: var(--ink); }
+
 .dhero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 0; border: 1px solid var(--ink); margin: 32px 0 40px; background: var(--card); }
 .dhero .vis { height: 100%; min-height: 300px; }
 .dtitle { padding: 32px; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
@@ -224,3 +224,56 @@ blockquote.refl footer { font-family: var(--sans); font-size: 12px; color: var(-
 #modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: grid; place-items: center; z-index: 40; padding: 16px; }
 .sheet { background: var(--paper); max-width: 520px; width: 100%; padding: 4px 18px 18px; display: grid; gap: 10px; }
 .sheet .linkbtn { justify-self: center; }
+
+/* 深入一點、推薦讀物 */
+.deep p { font-family: var(--serif); font-size: 17px; line-height: 1.95; }
+.deep p + p { margin-top: 14px; }
+.books { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.book { display: grid; grid-template-columns: 10px 1fr; gap: 14px; background: var(--card); border: 1px solid var(--line); padding: 16px 16px 16px 0; }
+.book .spine { background: var(--c); }
+.book h3 { font-size: 18px; }
+.book .author { font-family: var(--latin); font-style: italic; color: var(--muted); margin: 2px 0 6px; }
+.book p:last-child { font-size: 14.5px; }
+.subhead { font-size: 16px; margin: 20px 0 10px; }
+.practice { margin: 0; padding-left: 1.4em; display: grid; gap: 8px; }
+.practice li::marker { color: var(--c); font-family: var(--latin); font-weight: 600; }
+.ticon { display: inline-flex; vertical-align: -3px; margin-right: 10px; color: var(--c); }
+
+/* 技能樹 */
+.tree-block { max-width: none; }
+.treewrap { background: var(--card); border: 1px solid var(--line); }
+svg.tree { display: block; width: 100%; height: auto; }
+.tree .node { cursor: pointer; outline: none; }
+.tree .ring { fill: var(--paper); stroke: var(--ink); stroke-width: 1.5; }
+.tree .ic { color: var(--ink); }
+.tree .badge { fill: var(--paper); stroke: var(--line); }
+.tree text { font: 600 11px var(--sans); fill: var(--muted); }
+.tree .node.part .ring { stroke: var(--c); stroke-width: 3; }
+.tree .node.part .ic { color: var(--c); }
+.tree .node.part .badge { stroke: var(--c); }
+.tree .node.part text { fill: var(--c); }
+.tree .node.full .ring { fill: var(--c); stroke: var(--c); stroke-width: 3; }
+.tree .node.full .ic { color: var(--paper); }
+.tree .node.full .badge { fill: var(--c); stroke: var(--c); }
+.tree .node.full text { fill: var(--paper); }
+.tree .node.locked .ring { stroke: var(--line); stroke-dasharray: 3 3; }
+.tree .node.locked .ic { color: var(--line); }
+.tree .lock rect, .tree .lock path { stroke: var(--muted); stroke-width: 1.4; fill: var(--paper); }
+.tree .node:hover .ring, .tree .node:focus-visible .ring, .tree .node.sel .ring { stroke: var(--gold); stroke-width: 3.5; }
+.tree .hub .ring { fill: var(--c); stroke: var(--c); }
+.tree .hub .ic { color: var(--paper); }
+.tree .hub .hl { font: 600 14px var(--latin); letter-spacing: .2em; fill: var(--c); }
+.tree .hub .hp { font: 600 22px var(--latin); fill: var(--ink); }
+.tree .hub .hs { font: 500 12px var(--sans); fill: var(--muted); }
+.treetabs { margin-bottom: 10px; }
+.treelegend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; margin-top: 10px; align-items: center; }
+.lg { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; border: 2px solid var(--ink); }
+.lg.full { background: var(--h); border-color: var(--h); } .lg.part { border-color: var(--h); } .lg.locked { border: 2px dashed var(--line); }
+.treeinfo { margin-top: 14px; }
+.tsel { display: flex; gap: 14px; align-items: flex-start; padding: 16px; border: 1px solid var(--c); background: var(--card); }
+.tsel h3 { font-size: 20px; margin: 2px 0 8px; }
+.pts { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+.pts li { font-size: 13px; padding: 3px 10px; border: 1px solid var(--line); color: var(--muted); }
+.pts li.ok { border-color: var(--c); color: var(--c); }
+.tree .hub.you .ring { fill: var(--ink); stroke: var(--ink); }
+.tree .hub.you .yt { font: 700 16px var(--serif); fill: var(--paper); }

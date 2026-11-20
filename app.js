@@ -307,7 +307,7 @@ function renderTopic(app, id) {
         ${visual(t, 'wide')}
         <div class="dtitle">
           <p class="kicker"><span class="cat">${CATS[t.cat].en}</span><span>${esc(t.time)}</span><span>${dots(t.diff)} ${diffLabel(t.diff)}</span></p>
-          <h1>${esc(t.title)}</h1>
+          <h1><span class="ticon">${icon(t.id, 30)}</span>${esc(t.title)}</h1>
           <p class="lede">${esc(t.sub)}</p>
           <div class="actions">${action}<button class="btn icon ${saved ? 'on' : ''}" id="saveT">${saved ? '♥ 已收藏' : '♡ 收藏'}</button><a class="btn ghost" href="#related">延伸探索 ↓</a></div>
         </div>
@@ -316,6 +316,7 @@ function renderTopic(app, id) {
       <section class="block intro"><h2 class="sec">簡介</h2><p class="dropcap">${esc(t.intro)}</p></section>
       <section class="block"><h2 class="sec">為什麼有趣</h2><ul class="whylist">${t.why.map(w => `<li>${esc(w)}</li>`).join('')}</ul></section>
       <section class="block"><h2 class="sec">${t.cat === 'experience' ? '怎麼做得更好' : '關鍵概念'}</h2><div class="concepts">${t.concepts.map((c, i) => `<div class="concept"><span class="cn">${String(i + 1).padStart(2, '0')}</span><h3>${esc(c.t)}</h3><p>${esc(c.d)}</p></div>`).join('')}</div></section>
+      ${t.deep ? `<section class="block deep"><h2 class="sec">深入一點</h2>${t.deep.map(p => `<p>${esc(p)}</p>`).join('')}</section>` : ''}
       ${t.gear ? `<section class="block two"><div><h2 class="sec">入門裝備</h2><ul class="plain">${t.gear.map(g => `<li>${esc(g)}</li>`).join('')}</ul></div><div><h2 class="sec">新手常犯的錯</h2><ul class="plain warn">${t.mistakes.map(g => `<li>${esc(g)}</li>`).join('')}</ul></div></section>` : ''}
       ${t.steps ? `<section class="block" id="do"><h2 class="sec">實際去做</h2>
         <ol class="steps">${t.steps.map((s, i) => `<li><label><input type="checkbox" data-step="${i}" ${ex.steps[i] ? 'checked' : ''} ${ex.done ? 'disabled' : ''}><span>${esc(s)}</span></label></li>`).join('')}</ol>
@@ -326,6 +327,10 @@ function renderTopic(app, id) {
       <section class="block"><h2 class="sec">下一步</h2><ul class="nextlist">${t.next.map(n => `<li>${esc(n)}</li>`).join('')}</ul>
         ${t.cat === 'knowledge' && S.read[id] ? reflectionView(S.read[id]) : ''}
         <div class="actions" style="margin-top:16px">${action}</div></section>
+      ${(t.reads?.length || t.practice?.length) ? `<section class="block reads"><h2 class="sec">推薦讀物與實作</h2>
+        ${t.reads?.length ? `<div class="books">${t.reads.map(b => `<div class="book"><span class="spine"></span><div><h3>${esc(b.t)}</h3><p class="author">${esc(b.a)}</p><p>${esc(b.w)}</p></div></div>`).join('')}</div>` : ''}
+        ${t.practice?.length ? `<h3 class="subhead">動手練習</h3><ol class="practice">${t.practice.map(p => `<li>${esc(p)}</li>`).join('')}</ol>` : ''}
+      </section>` : ''}
       <section class="block" id="related"><h2 class="sec">相關主題</h2>
         <div class="grid three">${rel.map(r => card(r)).join('')}</div>
         ${S.moreRel === id ? (more.length ? `<h2 class="sec" style="margin-top:28px">再延伸一點</h2><div class="grid three">${more.map(r => card(r)).join('')}</div>` : '<p class="muted">已經沒有更遠的相關主題了。</p>') : `<button class="btn" id="moreRel" style="margin-top:16px">✦ 找更多相關主題</button>`}
@@ -446,9 +451,8 @@ function renderJourney(app) {
       <div><b>${notes.length}</b><span>筆記與心得</span></div>
       <div><b>${activeDays}</b><span>活躍天數</span></div>
     </section>
-    <section class="block"><h2 class="sec">探索的平衡</h2>
-      <div class="balance">${Object.entries(CATS).map(([k, c]) => `<span class="seg cat-${k}" style="flex:${catN(k) || 0.0001}" title="${c.zh} ${catN(k)}"></span>`).join('')}</div>
-      <div class="legend">${Object.entries(CATS).map(([k, c]) => `<span class="cat-${k}"><i></i>${c.en} ${catN(k)}（${Math.round(catN(k) / total * 100)}%）</span>`).join('')}</div>
+    <section class="block tree-block"><h2 class="sec">技能樹</h2>
+      <div id="tree"></div>
     </section>
     ${going.length ? `<section class="block"><h2 class="sec">進行中的挑戰</h2>${going.map(([id, c]) => { const n = Object.values(c.days).filter(x => x.done).length; return `<a class="mini" href="#/challenge/${id}"><b>${esc(T[id].title)}</b><span>${n}/7 天</span><span class="bar"><i style="width:${n / 7 * 100}%"></i></span></a>`; }).join('')}</section>` : ''}
     <section class="block"><h2 class="sec">收藏</h2>${Object.keys(S.saved).length ? `<div class="grid three">${Object.keys(S.saved).map(id => T[id]).filter(Boolean).map(t => card(t)).join('')}</div>` : '<p class="muted">還沒有收藏。看到喜歡的主題按 ♡ 就會出現在這裡。</p>'}</section>
@@ -462,6 +466,7 @@ function renderJourney(app) {
       <p class="muted small">資料只存在這個瀏覽器。換裝置前先匯出備份。</p>
     </section>`;
   bindCards(app);
+  renderTree($('#tree'));
   $('#exp').onclick = () => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' }));
@@ -474,5 +479,109 @@ function renderJourney(app) {
   const w = $('#wipe'); let armed = false;
   w.onclick = () => { if (!armed) { armed = true; w.textContent = '再按一次確認清除'; setTimeout(() => { armed = false; w.textContent = '清除所有資料'; }, 3000); return; } S = blank(); save(); location.hash = '#/home'; render(); };
 }
+
+// ================= 技能樹 =================
+// 每個節點 5 點：看過 1、收藏 1、完成 3（嗜好：挑戰每 2 天 1 點；體驗：每完成一步 1 點）
+function donePts(t) {
+  if (t.cat === 'knowledge') return S.read[t.id] ? 3 : 0;
+  if (t.cat === 'hobby') { const c = S.challenges[t.id]; if (!c) return 0; if (c.finished) return 3; return Math.min(3, Math.floor(Object.values(c.days || {}).filter(d => d.done).length / 2)); }
+  const e = S.exps[t.id]; if (!e) return 0; return e.done ? 3 : Math.min(3, (e.steps || []).filter(Boolean).length);
+}
+const pts = t => (S.viewed[t.id] ? 1 : 0) + (S.saved[t.id] ? 1 : 0) + donePts(t);
+const TIER_SIZES = [4, 6, 6, 4];
+let treeCache = null;
+function buildTree() {
+  if (treeCache) return treeCache;
+  const out = {};
+  for (const cat of Object.keys(CATS)) {
+    const list = TOPICS.filter(t => t.cat === cat).slice().sort((a, b) => a.diff - b.diff || a.hours - b.hours);
+    const tiers = []; let i = 0;
+    for (const n of TIER_SIZES) { if (i >= list.length) break; tiers.push(list.slice(i, i + n)); i += n; }
+    if (i < list.length) tiers[tiers.length - 1].push(...list.slice(i));
+    const parent = {};
+    tiers.forEach((tier, k) => tier.forEach((t, j) => {
+      if (k === 0) { parent[t.id] = null; return; }
+      const prev = tiers[k - 1];
+      // 依位置找最近的上一層節點，連線才不會交叉
+      const near = prev[Math.min(prev.length - 1, Math.round(j * (prev.length - 1) / Math.max(1, tier.length - 1)))];
+      parent[t.id] = near.id;
+    }));
+    out[cat] = { tiers, parent };
+  }
+  return (treeCache = out);
+}
+const BR = { knowledge: { ang: -145, col: 'var(--k)' }, hobby: { ang: -90, col: 'var(--h)' }, experience: { ang: -35, col: 'var(--e)' } };
+function layoutBranch(cat, ox, oy, ang, step = 82, gap = 58) {
+  const { tiers, parent } = buildTree()[cat];
+  const a = ang * Math.PI / 180, dx = Math.cos(a), dy = Math.sin(a), px = -dy, py = dx;
+  const pos = { ['hub-' + cat]: { x: ox, y: oy } };
+  tiers.forEach((tier, k) => {
+    const r = 70 + (k + 1) * step;
+    tier.forEach((t, j) => { const off = (j - (tier.length - 1) / 2) * gap; pos[t.id] = { x: ox + dx * r + px * off, y: oy + dy * r + py * off }; });
+  });
+  return { pos, tiers, parent };
+}
+let treeSel = null, treeBranch = 'knowledge';
+function renderTree(box) {
+  if (!box) return;
+  const narrow = box.clientWidth < 720;
+  const cats = narrow ? [treeBranch] : Object.keys(CATS);
+  const lays = {};
+  let W, H;
+  if (narrow) { W = 440; H = 520; lays[treeBranch] = layoutBranch(treeBranch, 220, 470, -90, 84, 64); }
+  else { W = 1200; H = 720; const cx = { knowledge: 220, hobby: 600, experience: 980 }, an = { knowledge: -94, hobby: -90, experience: -86 }; cats.forEach(c => lays[c] = layoutBranch(c, cx[c], 540, an[c], 92, 56)); }
+  const lines = [], nodes = [], hubs = [];
+  if (!narrow) {
+    const tot = TOPICS.reduce((s, t) => s + pts(t), 0);
+    cats.forEach(c => { const hx = lays[c].pos['hub-' + c].x; lines.push(hx === 600 ? `<path d="M600 700 V 626" stroke="${BR[c].col}" stroke-width="2.5"/>` : `<path d="M600 700 C ${(600 + hx) / 2} 700, ${hx} 690, ${hx} 626" fill="none" stroke="${BR[c].col}" stroke-width="2.5"/>`); });
+    hubs.push(`<g class="hub you" transform="translate(600 700)"><circle r="24" class="ring"/><text y="5" text-anchor="middle" class="yt">你</text><text y="44" text-anchor="middle" class="hs">總共 ${tot} 點</text></g>`);
+  }
+  for (const c of cats) {
+    const { pos, tiers, parent } = lays[c];
+    const col = BR[c].col;
+    const all = tiers.flat();
+    const total = all.reduce((s, t) => s + pts(t), 0);
+    for (const t of all) {
+      const p = parent[t.id] ? pos[parent[t.id]] : pos['hub-' + c];
+      const lit = pts(t) > 0;
+      lines.push(`<line x1="${p.x}" y1="${p.y}" x2="${pos[t.id].x}" y2="${pos[t.id].y}" stroke="${lit ? col : 'var(--line)'}" stroke-width="${lit ? 3 : 1.5}"/>`);
+    }
+    for (const t of all) {
+      const n = pts(t), par = parent[t.id] ? TOPICS.find(x => x.id === parent[t.id]) : null;
+      const locked = n === 0 && par && pts(par) === 0;
+      const { x, y } = pos[t.id];
+      const st = n >= 5 ? 'full' : n > 0 ? 'part' : locked ? 'locked' : 'open';
+      nodes.push(`<g class="node ${st} ${treeSel === t.id ? 'sel' : ''}" data-node="${t.id}" tabindex="0" role="button" aria-label="${esc(t.title)}，${n}/5${locked ? '，尚未點亮' : ''}" style="--c:${col}" transform="translate(${x} ${y})">
+        <circle r="22" class="ring"/>
+        <g transform="translate(-11 -11)" class="ic">${icon(t.id, 22).replace('<svg ', '<svg x="0" y="0" ')}</g>
+        <g transform="translate(0 33)"><rect x="-15" y="-8" width="30" height="16" rx="8" class="badge"/><text y="4" text-anchor="middle">${n}/5</text></g>
+        ${locked ? `<g transform="translate(-24 12)" class="lock"><rect x="-5" y="-2" width="10" height="8" rx="1.5"/><path d="M-3 -2v-2a3 3 0 0 1 6 0v2" fill="none"/></g>` : ''}
+        <title>${esc(t.title)}</title>
+      </g>`);
+    }
+    const h = pos['hub-' + c];
+    const lv = Math.floor(total / 10);
+    hubs.push(`<g class="hub" style="--c:${col}" transform="translate(${h.x} ${h.y})">
+      <circle r="30" class="ring"/><g transform="translate(-13 -13)" class="ic">${icon(c, 26).replace('<svg ', '<svg x="0" y="0" ')}</g>
+      <text y="${narrow ? 50 : 50}" text-anchor="middle" class="hl">${CATS[c].en}</text>
+      <text y="${narrow ? 70 : 72}" text-anchor="middle" class="hp">${total}<tspan class="hs"> 點 · Lv ${lv}</tspan></text>
+    </g>`);
+  }
+  const sel = treeSel && TOPICS.find(t => t.id === treeSel);
+  box.innerHTML = `
+    ${narrow ? `<div class="filters treetabs">${Object.entries(CATS).map(([k, c]) => `<button class="chip ${k === treeBranch ? 'on' : ''}" data-br="${k}">${c.en}</button>`).join('')}</div>` : ''}
+    <div class="treewrap"><svg viewBox="0 0 ${W} ${H + 50}" class="tree" role="group" aria-label="技能樹">${lines.join('')}${nodes.join('')}${hubs.join('')}</svg></div>
+    <div class="treelegend"><span><i class="lg full"></i>5/5 完成</span><span><i class="lg part"></i>進行中</span><span><i class="lg open"></i>可以探索</span><span><i class="lg locked"></i>尚未點亮</span><span class="muted">看過 +1、收藏 +1、完成 +3</span></div>
+    <div class="treeinfo">${sel ? (() => { const n = pts(sel), d = donePts(sel); return `<div class="tsel cat-${sel.cat}"><span class="ticon">${icon(sel.id, 26)}</span><div><p class="kicker"><span class="cat">${CATS[sel.cat].en}</span><span>${n}/5</span></p><h3>${esc(sel.title)}</h3>
+      <ul class="pts"><li class="${S.viewed[sel.id] ? 'ok' : ''}">看過 +1</li><li class="${S.saved[sel.id] ? 'ok' : ''}">收藏 +1</li><li class="${d ? 'ok' : ''}">${sel.cat === 'knowledge' ? '讀完' : sel.cat === 'hobby' ? '七天挑戰' : '完成體驗'} +${d}/3</li></ul>
+      <a class="btn primary" href="#/topic/${sel.id}">前往主題</a></div></div>`; })() : '<p class="muted">點一個節點看詳細進度。</p>'}</div>`;
+  $$('[data-node]', box).forEach(g => {
+    const pick = () => { treeSel = g.dataset.node; renderTree(box); };
+    g.addEventListener('click', pick);
+    g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+  });
+  $$('[data-br]', box).forEach(b => b.onclick = () => { treeBranch = b.dataset.br; treeSel = null; renderTree(box); });
+}
+window.addEventListener('resize', () => { const b = $('#tree'); if (b) renderTree(b); });
 
 render();
