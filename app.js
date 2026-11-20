@@ -488,36 +488,53 @@ function donePts(t) {
   const e = S.exps[t.id]; if (!e) return 0; return e.done ? 3 : Math.min(3, (e.steps || []).filter(Boolean).length);
 }
 const pts = t => (S.viewed[t.id] ? 1 : 0) + (S.saved[t.id] ? 1 : 0) + donePts(t);
-const TIER_SIZES = [4, 6, 6, 4];
 let treeCache = null;
 function buildTree() {
   if (treeCache) return treeCache;
   const out = {};
   for (const cat of Object.keys(CATS)) {
-    const list = TOPICS.filter(t => t.cat === cat).slice().sort((a, b) => a.diff - b.diff || a.hours - b.hours);
-    const tiers = []; let i = 0;
-    for (const n of TIER_SIZES) { if (i >= list.length) break; tiers.push(list.slice(i, i + n)); i += n; }
-    if (i < list.length) tiers[tiers.length - 1].push(...list.slice(i));
-    const parent = {};
-    tiers.forEach((tier, k) => tier.forEach((t, j) => {
-      if (k === 0) { parent[t.id] = null; return; }
-      const prev = tiers[k - 1];
-      // 依位置找最近的上一層節點，連線才不會交叉
-      const near = prev[Math.min(prev.length - 1, Math.round(j * (prev.length - 1) / Math.max(1, tier.length - 1)))];
-      parent[t.id] = near.id;
-    }));
-    out[cat] = { tiers, parent };
+    // 沿著「相關主題」從入門主題往外長（廣度優先）：每個節點的上一層就是它的相關主題
+    const list = TOPICS.filter(t => t.cat === cat);
+    const byId = Object.fromEntries(list.map(t => [t.id, t]));
+    const nb = id => list.filter(x => x.id !== id && (byId[id].related.includes(x.id) || x.related.includes(id)));
+    const roots = list.filter(t => t.diff === 1).sort((a, b) => nb(b.id).length - nb(a.id).length).slice(0, 4);
+    const parent = {}, depth = {}, fallback = [];
+    roots.forEach(r => { parent[r.id] = null; depth[r.id] = 0; });
+    let frontier = roots.map(r => r.id);
+    while (frontier.length) {
+      const next = [];
+      for (const id of frontier) for (const x of nb(id)) if (!(x.id in depth)) { depth[x.id] = depth[id] + 1; parent[x.id] = id; next.push(x.id); }
+      frontier = next;
+    }
+    // 和同類主題完全沒有相關連結的，接到分枝根部
+    list.forEach(t => { if (!(t.id in depth)) { depth[t.id] = 0; parent[t.id] = null; fallback.push(t.id); } });
+    const tiers = [];
+    list.forEach(t => (tiers[depth[t.id]] = tiers[depth[t.id]] || []).push(t));
+    // 每層依父節點的位置排序，減少交叉
+    const pos = {};
+    tiers.forEach(tier => {
+      tier.sort((a, b) => (parent[a.id] ? pos[parent[a.id]] : 0.5) - (parent[b.id] ? pos[parent[b.id]] : 0.5) || a.diff - b.diff);
+      tier.forEach((t, j) => pos[t.id] = tier.length > 1 ? j / (tier.length - 1) : 0.5);
+    });
+    out[cat] = { tiers, parent, fallback };
   }
   return (treeCache = out);
 }
 const BR = { knowledge: { ang: -145, col: 'var(--k)' }, hobby: { ang: -90, col: 'var(--h)' }, experience: { ang: -35, col: 'var(--e)' } };
-function layoutBranch(cat, ox, oy, ang, step = 82, gap = 58) {
+function treeRows(cat, maxPerRow = 6) {
+  const rows = [];
+  // 同一層超過 maxPerRow 個就上下交錯成兩排
+  buildTree()[cat].tiers.forEach(tier => { if (tier.length <= maxPerRow) rows.push(tier); else { rows.push(tier.filter((_, j) => j % 2 === 0)); rows.push(tier.filter((_, j) => j % 2 === 1)); } });
+  return rows;
+}
+const ROW = 80;
+function layoutBranch(cat, ox, oy, ang, gap = 58) {
   const { tiers, parent } = buildTree()[cat];
   const a = ang * Math.PI / 180, dx = Math.cos(a), dy = Math.sin(a), px = -dy, py = dx;
   const pos = { ['hub-' + cat]: { x: ox, y: oy } };
-  tiers.forEach((tier, k) => {
-    const r = 70 + (k + 1) * step;
-    tier.forEach((t, j) => { const off = (j - (tier.length - 1) / 2) * gap; pos[t.id] = { x: ox + dx * r + px * off, y: oy + dy * r + py * off }; });
+  treeRows(cat).forEach((row, k) => {
+    const r = 70 + (k + 1) * ROW;
+    row.forEach((t, j) => { const off = (j - (row.length - 1) / 2) * gap; pos[t.id] = { x: ox + dx * r + px * off, y: oy + dy * r + py * off }; });
   });
   return { pos, tiers, parent };
 }
@@ -528,13 +545,16 @@ function renderTree(box) {
   const cats = narrow ? [treeBranch] : Object.keys(CATS);
   const lays = {};
   let W, H;
-  if (narrow) { W = 440; H = 520; lays[treeBranch] = layoutBranch(treeBranch, 220, 470, -90, 84, 64); }
-  else { W = 1200; H = 720; const cx = { knowledge: 220, hobby: 600, experience: 980 }, an = { knowledge: -94, hobby: -90, experience: -86 }; cats.forEach(c => lays[c] = layoutBranch(c, cx[c], 540, an[c], 92, 56)); }
+  const maxRows = Math.max(...cats.map(c => treeRows(c).length));
+  const oy = 110 + maxRows * ROW;
+  if (narrow) { W = 440; H = oy + 90; lays[treeBranch] = layoutBranch(treeBranch, 220, oy, -90, 66); }
+  else { W = 1200; H = oy + 210; const cx = { knowledge: 220, hobby: 600, experience: 980 }, an = { knowledge: -93, hobby: -90, experience: -87 }; cats.forEach(c => lays[c] = layoutBranch(c, cx[c], oy, an[c], 62)); }
   const lines = [], nodes = [], hubs = [];
   if (!narrow) {
     const tot = TOPICS.reduce((s, t) => s + pts(t), 0);
-    cats.forEach(c => { const hx = lays[c].pos['hub-' + c].x; lines.push(hx === 600 ? `<path d="M600 700 V 626" stroke="${BR[c].col}" stroke-width="2.5"/>` : `<path d="M600 700 C ${(600 + hx) / 2} 700, ${hx} 690, ${hx} 626" fill="none" stroke="${BR[c].col}" stroke-width="2.5"/>`); });
-    hubs.push(`<g class="hub you" transform="translate(600 700)"><circle r="24" class="ring"/><text y="5" text-anchor="middle" class="yt">你</text><text y="44" text-anchor="middle" class="hs">總共 ${tot} 點</text></g>`);
+    const yy = oy + 160, hb = oy + 86;
+    cats.forEach(c => { const hx = lays[c].pos['hub-' + c].x; lines.push(hx === 600 ? `<path d="M600 ${yy} V ${hb}" stroke="${BR[c].col}" stroke-width="2.5"/>` : `<path d="M600 ${yy} C ${(600 + hx) / 2} ${yy}, ${hx} ${yy - 10}, ${hx} ${hb}" fill="none" stroke="${BR[c].col}" stroke-width="2.5"/>`); });
+    hubs.push(`<g class="hub you" transform="translate(600 ${yy})"><circle r="24" class="ring"/><text y="5" text-anchor="middle" class="yt">你</text><text y="44" text-anchor="middle" class="hs">總共 ${tot} 點</text></g>`);
   }
   for (const c of cats) {
     const { pos, tiers, parent } = lays[c];
@@ -570,7 +590,7 @@ function renderTree(box) {
   const sel = treeSel && TOPICS.find(t => t.id === treeSel);
   box.innerHTML = `
     ${narrow ? `<div class="filters treetabs">${Object.entries(CATS).map(([k, c]) => `<button class="chip ${k === treeBranch ? 'on' : ''}" data-br="${k}">${c.en}</button>`).join('')}</div>` : ''}
-    <div class="treewrap"><svg viewBox="0 0 ${W} ${H + 50}" class="tree" role="group" aria-label="技能樹">${lines.join('')}${nodes.join('')}${hubs.join('')}</svg></div>
+    <div class="treewrap"><svg viewBox="0 0 ${W} ${H + 20}" class="tree" role="group" aria-label="技能樹">${lines.join('')}${nodes.join('')}${hubs.join('')}</svg></div>
     <div class="treelegend"><span><i class="lg full"></i>5/5 完成</span><span><i class="lg part"></i>進行中</span><span><i class="lg open"></i>可以探索</span><span><i class="lg locked"></i>尚未點亮</span><span class="muted">看過 +1、收藏 +1、完成 +3</span></div>
     <div class="treeinfo">${sel ? (() => { const n = pts(sel), d = donePts(sel); return `<div class="tsel cat-${sel.cat}"><span class="ticon">${icon(sel.id, 26)}</span><div><p class="kicker"><span class="cat">${CATS[sel.cat].en}</span><span>${n}/5</span></p><h3>${esc(sel.title)}</h3>
       <ul class="pts"><li class="${S.viewed[sel.id] ? 'ok' : ''}">看過 +1</li><li class="${S.saved[sel.id] ? 'ok' : ''}">收藏 +1</li><li class="${d ? 'ok' : ''}">${sel.cat === 'knowledge' ? '讀完' : sel.cat === 'hobby' ? '七天挑戰' : '完成體驗'} +${d}/3</li></ul>
