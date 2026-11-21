@@ -1,4 +1,4 @@
-// 60 個主題的線條小圖示（24×24，描邊，currentColor）
+// 95 個主題的線條小圖示（24×24，描邊，currentColor）
 const ICONS = {
   // 知識
   sleep: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/><path d="M15 4h3l-3 3h3"/>',
@@ -63,6 +63,42 @@ const ICONS = {
   sunset: '<path d="M2 15h20"/><path d="M6 15a6 6 0 0 1 12 0"/><path d="M12 6v-3M9 18h6M7 21h10"/>',
   movie: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
   botanic: '<path d="M12 22V12"/><path d="M12 12c-5 0-8-3-8-8 5 0 8 3 8 8z"/><path d="M12 16c3 0 6-2 6-6-3 0-6 2-6 6z"/>',
+  // 第三批
+  etymology: '<path d="M4 19V5h5a3 3 0 0 1 0 6H4"/><path d="M9 11l4 8"/><path d="M15 8h6M18 5v6"/><path d="M15 16h6"/>',
+  chinesechar: '<path d="M4 6h16"/><path d="M12 3v18"/><path d="M12 9L5 17"/><path d="M12 9l7 8"/>',
+  rock: '<path d="M7 21l3-7"/><path d="M10 14l7-11 3 2-6 10z"/><circle cx="8" cy="15" r="3"/>',
+  hiphop: '<rect x="3" y="7" width="18" height="12" rx="2"/><circle cx="8" cy="13" r="2.5"/><circle cx="16" cy="13" r="2.5"/><path d="M7 7l2-3h6l2 3"/>',
+  soundsci: '<path d="M2 12c2-6 4-6 6 0s4 6 6 0 4-6 6 0"/><path d="M2 12h2M20 12h2"/>',
+  soundtrack: '<rect x="3" y="5" width="12" height="14" rx="1"/><path d="M15 10l6-3v10l-6-3"/><path d="M7 15V9l4-1v6"/>',
+  linguistics: '<path d="M3 5h11v8H8l-3 3v-3H3z"/><path d="M14 9h7v8h-2v3l-3-3h-5v-4"/>',
+  machinetranslation: '<rect x="2" y="4" width="9" height="9" rx="1"/><rect x="13" y="11" width="9" height="9" rx="1"/><path d="M5 10l1.5-4 1.5 4M5.5 8.5h2"/><path d="M15 14h5M17.5 13v1M19 14c0 2-1.5 4-3.5 4"/>',
+  platform: '<circle cx="12" cy="12" r="3"/><circle cx="4" cy="5" r="2"/><circle cx="20" cy="5" r="2"/><circle cx="4" cy="19" r="2"/><circle cx="20" cy="19" r="2"/><path d="M6 6l4 4M18 6l-4 4M6 18l4-4M18 18l-4-4"/>',
+  marketing: '<path d="M3 10v4h3l7 5V5L6 10z"/><path d="M17 9a4 4 0 0 1 0 6M19.5 6.5a8 8 0 0 1 0 11"/>',
+  coffeechain: '<ellipse cx="7" cy="8" rx="3" ry="4.5" transform="rotate(-30 7 8)"/><path d="M5.5 5.5c1.5 1.5 1.5 3.5 3 5"/><path d="M12 15h8v2a4 4 0 0 1-4 4h0a4 4 0 0 1-4-4z"/><path d="M14 9h6M17 6l3 3-3 3"/>',
+  inflation: '<path d="M3 20h18"/><path d="M5 16l4-4 3 3 7-8"/><path d="M15 7h4v4"/>',
+  beatmaking: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h2v2H7zM11 7h2v2h-2zM15 11h2v2h-2zM7 15h2v2H7zM11 15h2v2h-2z"/>',
+  lyrics: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/><path d="M3 4h4M3 8h3"/>',
+  english: '<path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6"/>',
+  calligraphy: '<path d="M14 3l3 3-7 9-3 1 1-3z"/><path d="M7 16c-2 2-3 3-4 5 2-1 3-2 5-4"/><path d="M13 21h8"/>',
+  origbook: '<path d="M2 5c3-1 7-1 10 1 3-2 7-2 10-1v14c-3-1-7-1-10 1-3-2-7-2-10-1z"/><path d="M12 6v14"/><path d="M5 9l1.5-2 1.5 2M5.5 8h2"/><path d="M15 9h4M15 12h4"/>',
+  arduino: '<rect x="4" y="6" width="16" height="12" rx="1.5"/><path d="M8 6V3M12 6V3M16 6V3M8 18v3M12 18v3M16 18v3"/><rect x="9" y="10" width="6" height="4"/>',
+  website: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20"/><circle cx="5" cy="6" r=".5"/><circle cx="7.5" cy="6" r=".5"/><path d="M6 12h6M6 15h4M15 12h3v4h-3z"/>',
+  lightroom: '<path d="M4 6h10M18 6h2M4 12h3M11 12h9M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  mealprep: '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M3 12h18M12 12v8"/><path d="M6 8V6h12v2"/>',
+  budget: '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8v3H8z"/><path d="M8 13h1M11.5 13h1M15 13h1M8 17h1M11.5 17h1M15 17h1"/>',
+  badminton: '<path d="M9 9l-5 5c-1.5 1.5 0 4 1.5 2.5L11 12"/><path d="M14 4l4 3-3 5-4-3z"/><path d="M14 4l-2-2M18 7l2-2M15 12l1 2"/>',
+  sportmeal: '<path d="M3 13h18a9 9 0 0 1-18 0z"/><path d="M7 13c0-3 2-4 4-4M13 13c1-2 3-3 5-2"/><path d="M12 4v3M9 5l1 2M15 5l-1 2"/>',
+  dance: '<circle cx="13" cy="4" r="2"/><path d="M13 7l-2 6 4 3 1 5"/><path d="M11 13l-4 3-2 4"/><path d="M13 8l5-2M12 9l-5 1"/>',
+  album: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 6a6 6 0 0 0-6 6"/>',
+  openmic: '<circle cx="15" cy="7" r="4"/><path d="M12 9.5L4 19l1.5 1.5L15 12"/><path d="M13 5l4 4"/>',
+  poetry: '<path d="M20 4c-8 0-14 6-14 14"/><path d="M20 4c0 6-4 10-10 11"/><path d="M6 18l-3 3"/><path d="M11 13l3-3"/>',
+  foreignmenu: '<path d="M5 3v18M3 3v5a2 2 0 0 0 4 0V3"/><path d="M11 5h10v14H11z"/><path d="M13 9h6M13 12h6M13 15h4"/>',
+  roadrace: '<rect x="5" y="4" width="14" height="10" rx="1"/><circle cx="8" cy="7" r=".6"/><circle cx="16" cy="7" r=".6"/><path d="M9 11h6"/><path d="M8 14l-2 7M16 14l2 7"/>',
+  baseball: '<circle cx="12" cy="12" r="9"/><path d="M7 4.5c2 2 3 4.5 3 7.5s-1 5.5-3 7.5M17 4.5c-2 2-3 4.5-3 7.5s1 5.5 3 7.5"/>',
+  nightmarket: '<path d="M3 9h18l-2-4H5z"/><path d="M5 9v11M19 9v11M3 20h18"/><circle cx="8" cy="13" r="1.5"/><circle cx="12" cy="13" r="1.5"/><circle cx="16" cy="13" r="1.5"/>',
+  marketstall: '<path d="M3 8l2-4h14l2 4"/><path d="M3 8a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/><path d="M5 11v9h14v-9"/><path d="M10 20v-5h4v5"/>',
+  cookingclass: '<path d="M6 14a4 4 0 0 1-1-7.8A5 5 0 0 1 14 4a4 4 0 0 1 5 6v4z"/><path d="M6 14v6h13v-6"/><path d="M10 17h5"/>',
+  teatasting: '<path d="M4 10h12v3a6 6 0 0 1-12 0z"/><path d="M16 11h2a2 2 0 0 1 0 4h-2"/><path d="M8 3c0 2 2 2 2 4M12 3c0 2 2 2 2 4"/><path d="M3 21h14"/>',
 };
 const CAT_ICONS = {
   knowledge: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21a2 2 0 0 1 2-2h13v2H6"/><path d="M9 8h6"/>',

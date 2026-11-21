@@ -551,6 +551,33 @@ function layoutRadial(cx, cy) {
       row.forEach((t, j) => { const a = th + (j - (row.length - 1) / 2) * step + shift; pos[tag + ':' + t.id] = { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }; });
     });
   });
+  // 節點下方還有進度徽章：把每個節點當成「圓＋徽章」的方框，互相推開到不重疊
+  const keys = Object.keys(pos).filter(k => !k.startsWith('hub-'));
+  const hubs = Object.keys(pos).filter(k => k.startsWith('hub-'));
+  const BW = 50, BH = 66, OFF = 9, HW = 90, HH = 100;
+  for (let it = 0; it < 80; it++) {
+    let moved = 0;
+    for (let i = 0; i < keys.length; i++) {
+      for (let j = i + 1; j < keys.length; j++) {
+        const a = pos[keys[i]], b = pos[keys[j]];
+        const ox = BW - Math.abs(a.x - b.x), oy = BH - Math.abs(a.y - b.y);
+        if (ox <= 0 || oy <= 0) continue;
+        moved++;
+        if (ox < oy) { const d = (ox / 2 + 0.5) * (a.x < b.x ? -1 : 1); a.x += d; b.x -= d; }
+        else { const d = (oy / 2 + 0.5) * (a.y < b.y ? -1 : 1); a.y += d; b.y -= d; }
+      }
+      // 分枝圓心固定不動，只推開節點
+      for (const h of hubs) {
+        const a = pos[keys[i]], b = pos[h];
+        const ox = HW - Math.abs(a.x - b.x), oy = HH - Math.abs(a.y - b.y);
+        if (ox <= 0 || oy <= 0) continue;
+        moved++;
+        if (ox < oy) a.x += (ox + 1) * (a.x < b.x ? -1 : 1); else a.y += (oy + 1) * (a.y < b.y ? -1 : 1);
+      }
+    }
+    if (!moved) break;
+  }
+  keys.forEach(k => { const p = pos[k]; maxR = Math.max(maxR, Math.hypot(p.x - cx, p.y - cy + OFF)); });
   return { pos, maxR };
 }
 // 單一分枝（手機）：從下往上長
