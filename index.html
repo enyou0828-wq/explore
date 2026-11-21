@@ -18,11 +18,12 @@
       <a href="#/home" data-p="home">今日</a>
       <a href="#/discover" data-p="discover">探索</a>
       <a href="#/journey" data-p="journey">我的旅程</a>
+      <button type="button" id="acct" class="acct" hidden></button>
     </nav>
   </div>
 </header>
 <main id="app"></main>
-<footer class="foot"><span class="logo">EXPLORE</span> · Discover more. Experience more.<br>資料只存在這個瀏覽器。內容僅供探索參考，實際活動請自行確認安全與開放時間。</footer>
+<footer class="foot"><span class="logo">EXPLORE</span> · Discover more. Experience more.<br><span id="footData">未登入時資料只存在這個瀏覽器。</span>內容僅供探索參考，實際活動請自行確認安全與開放時間。</footer>
 <div id="toast" role="status" hidden></div>
 <div id="modal" hidden></div>
 <script src="topics.js"></script>
@@ -31,5 +32,6 @@
 <script src="extra.js"></script>
 <script src="icons.js"></script>
 <script src="app.js"></script>
+<script type="module" src="cloud.js"></script>
 </body>
 </html>

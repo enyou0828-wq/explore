@@ -1,11 +1,18 @@
 'use strict';
 
-// ================= 狀態（只存在這個瀏覽器） =================
+// ================= 狀態（存在這個瀏覽器；登入 Google 後由 cloud.js 同步到雲端） =================
 const KEY = 'explore-v1';
 const blank = () => ({ profile: null, first: null, saved: {}, dismissed: {}, viewed: {}, read: {}, challenges: {}, exps: {}, events: [], daily: null, fresh: [] });
 let S = load();
 function load() { try { return Object.assign(blank(), JSON.parse(localStorage.getItem(KEY)) || {}); } catch { return blank(); } }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* 無法儲存時照常運作 */ } }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* 無法儲存時照常運作 */ } window.cloudPush?.(); }
+// 給 cloud.js 用：讀目前狀態、用雲端版本整份取代（不觸發再上傳）、重畫
+window.EXPLORE = {
+  get state() { return S; },
+  replaceState(d) { S = Object.assign(blank(), d); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* 略過 */ } render(); },
+  render: () => render(),
+  toast: (...a) => toast(...a),
+};
 
 // ================= 工具 =================
 const $ = (s, el = document) => el.querySelector(s);
@@ -171,9 +178,10 @@ function route() {
 function render() {
   const app = $('#app');
   const { page, id } = route();
-  if (!S.profile || page === 'onboard') { renderOnboard(app); setNav(''); return; }
+  if (!S.profile || page === 'onboard') { renderOnboard(app); setNav(''); window.cloudPaint?.(); return; }
   setNav(page === 'topic' || page === 'challenge' ? '' : page);
   ({ home: renderHome, discover: renderDiscover, topic: renderTopic, challenge: renderChallenge, journey: renderJourney }[page] || renderHome)(app, id);
+  window.cloudPaint?.();
 }
 function setNav(p) { $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.p === p ? 'page' : 'false')); }
 window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
@@ -194,6 +202,7 @@ function renderOnboard(app) {
       <h1 class="masthead">EXPLORE</h1>
       <p class="tagline">Discover more. Experience more.</p>
       <p class="lede">回答 6 個問題，每天為你挑選值得認識的知識、嗜好和體驗。</p>
+      <p class="acct-line" data-acct="onboard"></p>
       <form id="ob" class="qs">
         <fieldset class="q"><legend><span class="qn">01</span>怎麼稱呼你？</legend>
           <input name="name" maxlength="20" value="${esc(p.name || '')}" placeholder="名字或暱稱" required></fieldset>
@@ -463,8 +472,8 @@ function renderJourney(app) {
     </section>
     <section class="block settings"><h2 class="sec">設定</h2>
       <div class="actions"><a class="btn" href="#/onboard">修改興趣與偏好</a><button class="btn" id="exp">匯出備份</button><label class="btn">匯入備份<input type="file" id="imp" accept="application/json" hidden></label><button class="btn danger" id="wipe">清除所有資料</button></div>
-      <p class="muted small">資料只存在這個瀏覽器。換裝置前先匯出備份。</p>
-    </section>`;
+    </section>
+    <section class="block settings" id="acctBox"><h2 class="sec">帳號與同步</h2><div data-acct="settings"></div></section>`;
   bindCards(app);
   renderTree($('#tree'));
   $('#exp').onclick = () => {
