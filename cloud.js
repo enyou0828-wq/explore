@@ -4,7 +4,7 @@
 // 沿用交易日誌的 Firebase 專案；登入轉接檔在同網域 enyou0828-wq.github.io/__/auth/。
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithCredential, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
+import { getFirestore, doc, getDoc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
 
 const fbApp = initializeApp({
   apiKey: 'AIzaSyCgERf59G6aqXyINK2iLU2OLwRLlrwydwQ',
@@ -85,7 +85,12 @@ async function pull(uid) {
   setMsg('正在讀取雲端進度…', true);
   try {
     const snap = await getDoc(doc(db, 'explore', uid));
-    const cloud = snap.exists() && snap.data().state ? snap.data() : null;
+    let cloud = snap.exists() && snap.data().state ? snap.data() : null;
+    // 重置前留下的舊雲端資料：刪掉、不讀回來
+    if (cloud && JSON.parse(cloud.state).rv !== window.EXPLORE.RESET_ID) {
+      await deleteDoc(doc(db, 'explore', uid)).catch(e => console.error(e));
+      cloud = null;
+    }
     const local = window.EXPLORE.state;
     const linked = linkedTo() === uid;
     loaded = true;

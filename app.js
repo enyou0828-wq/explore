@@ -2,15 +2,25 @@
 
 // ================= 狀態（存在這個瀏覽器；登入 Google 後由 cloud.js 同步到雲端） =================
 const KEY = 'explore-v1';
-const blank = () => ({ profile: null, first: null, saved: {}, dismissed: {}, viewed: {}, read: {}, challenges: {}, exps: {}, events: [], daily: null, fresh: [] });
+// 重置版本：改這個值，所有使用者下次打開時本機進度都會清空、從問卷重來；雲端的舊資料也不會再被讀回來（見 cloud.js）
+const RESET_ID = '2026-11-21';
+const blank = () => ({ rv: RESET_ID, profile: null, first: null, saved: {}, dismissed: {}, viewed: {}, read: {}, challenges: {}, exps: {}, events: [], daily: null, fresh: [] });
+let wasReset = false;
 let S = load();
-function load() { try { return Object.assign(blank(), JSON.parse(localStorage.getItem(KEY)) || {}); } catch { return blank(); } }
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (d && d.rv !== RESET_ID) { wasReset = !!d.profile; localStorage.removeItem(KEY); return blank(); }
+    return Object.assign(blank(), d || {});
+  } catch { return blank(); }
+}
 // save：使用者做了動作才用，會記下修改時間並觸發雲端同步；persist：自動產生的快取（例如今日推薦），不算修改
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* 無法儲存時照常運作 */ } }
 function save() { S.ts = Date.now(); persist(); window.cloudPush?.(); }
 // 給 cloud.js 用：讀目前狀態、用雲端版本整份取代（不觸發再上傳）、重畫
 window.EXPLORE = {
   get state() { return S; },
+  RESET_ID,
   replaceState(d) { S = Object.assign(blank(), d); persist(); render(); },
   render: () => render(),
   toast: (...a) => toast(...a),
@@ -717,3 +727,4 @@ function renderTree(box) {
 window.addEventListener('resize', () => { const b = $('#tree'); if (b) renderTree(b); });
 
 render();
+if (wasReset) toast('EXPLORE 改版了：所有進度已重置，請重新填一次問卷。');
