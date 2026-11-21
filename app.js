@@ -5,11 +5,13 @@ const KEY = 'explore-v1';
 const blank = () => ({ profile: null, first: null, saved: {}, dismissed: {}, viewed: {}, read: {}, challenges: {}, exps: {}, events: [], daily: null, fresh: [] });
 let S = load();
 function load() { try { return Object.assign(blank(), JSON.parse(localStorage.getItem(KEY)) || {}); } catch { return blank(); } }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* 無法儲存時照常運作 */ } window.cloudPush?.(); }
+// save：使用者做了動作才用，會記下修改時間並觸發雲端同步；persist：自動產生的快取（例如今日推薦），不算修改
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* 無法儲存時照常運作 */ } }
+function save() { S.ts = Date.now(); persist(); window.cloudPush?.(); }
 // 給 cloud.js 用：讀目前狀態、用雲端版本整份取代（不觸發再上傳）、重畫
 window.EXPLORE = {
   get state() { return S; },
-  replaceState(d) { S = Object.assign(blank(), d); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* 略過 */ } render(); },
+  replaceState(d) { S = Object.assign(blank(), d); persist(); render(); },
   render: () => render(),
   toast: (...a) => toast(...a),
 };
@@ -70,6 +72,23 @@ function visual(t, cls = '') {
 
 // ================= 個人化推薦（固定規則） =================
 const isDone = id => S.read[id] || S.challenges[id]?.finished || S.exps[id]?.done;
+// ================= 由淺入深：分層解鎖 =================
+// 每個分枝四層（levels.js）。同分枝上一層至少完成一個主題，這一層才解鎖；
+// 主題出現在幾個分枝，只要其中一個分枝走到了就能看。已經有進度的主題不會被鎖回去。
+const levelOf = (tag, id) => Math.max(0, LEVELS[tag].findIndex(l => l.includes(id)));
+const layerOpen = (tag, i) => i === 0 || LEVELS[tag][i - 1].some(id => isDone(id));
+function hasProgress(id) { return !!(S.viewed[id] || S.saved[id] || S.challenges[id] || S.exps[id] || S.read[id]); }
+function unlocked(id) { return hasProgress(id) || T[id].tags.some(g => LEVELS[g] && layerOpen(g, levelOf(g, id))); }
+// 還沒解鎖時：找最接近的一條路（需要的層數最淺的分枝），告訴使用者先完成哪幾個
+function unlockPath(id) {
+  const opts = T[id].tags.filter(g => LEVELS[g]).map(g => {
+    const lv = levelOf(g, id);
+    let k = lv; while (k > 0 && !layerOpen(g, k)) k--; // 第 k 層已開放、需要在第 k 層完成一個
+    return { g, lv, k, need: LEVELS[g][k] };
+  }).sort((a, b) => (a.lv - a.k) - (b.lv - b.k) || a.lv - b.lv);
+  return opts[0];
+}
+const unlockHint = id => { const u = unlockPath(id); return `完成「${INT[u.g]}」第 ${u.k + 1} 層（${LEVEL_NAMES[u.k]}）任一主題後${u.lv - u.k > 1 ? '逐層' : ''}解鎖`; };
 function scoreOf(t) {
   const p = S.profile || {};
   let s = 0; const why = [];
@@ -93,16 +112,16 @@ function scoreOf(t) {
   why.sort((x, y) => y[0] - x[0]);
   return { s, why: why.map(w => w[1]) };
 }
-function ranked(seed = today()) {
+function ranked(seed = today(), withLocked = false) {
   const r = rng(hash(seed));
-  return TOPICS.filter(t => !S.dismissed[t.id]).map(t => ({ t, ...scoreOf(t), j: r() * 1.5 }))
+  return TOPICS.filter(t => !S.dismissed[t.id] && (withLocked || unlocked(t.id))).map(t => ({ t, ...scoreOf(t), j: r() * 1.5 - (withLocked && !unlocked(t.id) ? 100 : 0) }))
     .sort((a, b) => (b.s + b.j) - (a.s + a.j));
 }
 // 今日推薦：先保證三類各一，再補到 4–5 張；一天內固定
 function dailyPicks() {
   const n = (S.profile?.hours || 5) >= 5 ? 5 : 4;
   if (S.daily?.date === today()) {
-    S.daily.ids = S.daily.ids.filter(id => !S.dismissed[id]);
+    S.daily.ids = S.daily.ids.filter(id => !S.dismissed[id] && unlocked(id));
     if (S.daily.ids.length >= Math.min(n, 3)) return S.daily.ids;
   }
   const list = ranked();
@@ -118,7 +137,7 @@ function dailyPicks() {
     if (ids.filter(id => T[id].cat === x.t.cat).length >= 2) continue;
     ids.push(x.t.id);
   }
-  S.daily = { date: today(), ids }; save();
+  S.daily = { date: today(), ids }; persist();
   return ids;
 }
 function whyText(t) {
@@ -130,8 +149,8 @@ function whyText(t) {
 
 // ================= 卡片 =================
 function card(t, opts = {}) {
-  const saved = !!S.saved[t.id];
-  return `<article class="card ${opts.big ? 'big' : ''} cat-${t.cat}">
+  const saved = !!S.saved[t.id], lock = !unlocked(t.id);
+  return `<article class="card ${opts.big ? 'big' : ''} ${lock ? 'locked' : ''} cat-${t.cat}">
     <a href="#/topic/${t.id}" class="cimg" aria-label="${esc(t.title)}">${visual(t)}</a>
     <div class="cbody">
       <div class="kicker"><span class="cat">${CATS[t.cat].en}</span><span>${esc(t.time)}</span><span title="難度：${diffLabel(t.diff)}">${dots(t.diff)} ${diffLabel(t.diff)}</span></div>
@@ -139,11 +158,11 @@ function card(t, opts = {}) {
       <p class="sub">${esc(t.sub)}</p>
       ${opts.why ? `<p class="why"><span>為什麼推薦</span>${esc(whyText(t))}</p>` : ''}
       ${isDone(t.id) ? '<p class="done-tag">已完成</p>' : ''}
-      <div class="actions">
+      ${lock ? `<p class="lockline">🔒 ${esc(unlockHint(t.id))}</p>` : `<div class="actions">
         <a class="btn primary" href="#/topic/${t.id}">開始探索</a>
         <button class="btn icon ${saved ? 'on' : ''}" data-save="${t.id}" aria-pressed="${saved}" title="${saved ? '取消收藏' : '收藏'}">${saved ? '♥' : '♡'}<span>${saved ? '已收藏' : '收藏'}</span></button>
         <button class="btn icon ghost" data-dismiss="${t.id}" title="不感興趣">✕<span>不感興趣</span></button>
-      </div>
+      </div>`}
     </div>
   </article>`;
 }
@@ -157,7 +176,12 @@ function bindCards(root) {
   });
 }
 function toggleSave(id) {
-  if (S.saved[id]) { delete S.saved[id]; log('unsave', id); } else { S.saved[id] = today(); log('save', id); }
+  if (S.saved[id]) { delete S.saved[id]; log('unsave', id); toast(`已取消收藏「${T[id].title}」。`); }
+  else {
+    S.saved[id] = today(); log('save', id);
+    const n = TOPICS.filter(x => x.id !== id && unlocked(x.id) && !S.saved[x.id] && (x.related.includes(id) || T[id].related.includes(x.id))).length;
+    toast(`已收藏「${T[id].title}」：放在首頁「我的收藏」，技能樹 +1${n ? `，之後多推薦 ${n} 個相關主題` : ''}。`, '看相關', () => { location.hash = `#/topic/${id}`; setTimeout(() => $('#related')?.scrollIntoView(), 80); });
+  }
   save();
 }
 let toastTimer;
@@ -247,6 +271,7 @@ function renderHome(app) {
       <div class="feature">${ids.map((id, i) => card(T[id], { why: true, big: i === 0 })).join('')}</div>
       ${ids.length < 3 ? '<p class="muted">今天的推薦都被你略過了，去「探索」頁看看其他主題吧。</p>' : ''}
     </section>
+    ${(() => { const sv = Object.keys(S.saved).filter(id => T[id] && !isDone(id) && !ids.includes(id)).sort((a, b) => S.saved[b].localeCompare(S.saved[a])); return sv.length ? `<section class="block"><h2 class="sec">我的收藏・還沒完成</h2><div class="grid three">${sv.slice(0, 6).map(id => card(T[id])).join('')}</div>${sv.length > 6 ? `<p class="muted small">還有 ${sv.length - 6} 個，在「我的旅程」看全部。</p>` : ''}</section>` : ''; })()}
     <section class="more"><a class="btn" href="#/discover">看更多主題 →</a></section>`;
   bindCards(app);
 }
@@ -254,7 +279,7 @@ function renderHome(app) {
 // ================= 探索 =================
 let filt = { cat: 'all', q: '', showDismissed: false };
 function renderDiscover(app) {
-  const list = ranked('discover');
+  const list = ranked('discover', true); // 探索頁也列出還沒解鎖的（排在後面、灰色），看得到前面還有什麼
   const q = filt.q.trim().toLowerCase();
   const match = t => !q || [t.title, t.sub, ...t.tags.map(g => INT[g]), CATS[t.cat].zh].join(' ').toLowerCase().includes(q);
   const shown = list.filter(x => (filt.cat === 'all' || x.t.cat === filt.cat || (filt.cat === 'saved' && S.saved[x.t.id])) && match(x.t)).map(x => x.t);
@@ -301,6 +326,18 @@ function renderDiscover(app) {
 function renderTopic(app, id) {
   const t = T[id];
   if (!t) { app.innerHTML = '<p class="muted">找不到這個主題。</p><a class="btn" href="#/discover">回到探索</a>'; return; }
+  if (!unlocked(id)) {
+    const u = unlockPath(id);
+    app.innerHTML = `
+      <section class="hero small locked-hero cat-${t.cat}">
+        <p class="eyebrow">🔒 尚未解鎖・${esc(INT[u.g])}第 ${u.lv + 1} 層（${LEVEL_NAMES[u.lv]}）</p>
+        <h1>${esc(t.title)}</h1>
+        <p class="lede">${esc(t.sub)}</p>
+        <p class="muted">EXPLORE 的主題由淺入深排列。先在「${esc(INT[u.g])}」第 ${u.k + 1} 層（${LEVEL_NAMES[u.k]}）完成下面任一個${u.lv - u.k > 1 ? '，再一層一層往外走' : '，這個主題就會打開'}。</p>
+      </section>
+      <section class="block"><h2 class="sec">先從這裡開始</h2><div class="grid three">${u.need.map(x => card(T[x])).join('')}</div></section>`;
+    bindCards(app); return;
+  }
   if (!S.viewed[id]) { S.viewed[id] = today(); log('view', id); save(); }
   const saved = !!S.saved[id];
   const rel = t.related.map(r => T[r]).filter(Boolean);
@@ -375,11 +412,15 @@ function bindReflect(root, kind, id) {
     e.preventDefault();
     const fd = new FormData(f);
     const r = { text: String(fd.get('text') || '').trim(), rate: +fd.get('rate'), date: today() };
+    const before = new Set(TOPICS.filter(x => unlocked(x.id)).map(x => x.id));
     if (f.dataset.kind === 'exp') { Object.assign(S.exps[id], r, { done: true }); log('expdone', id, r.text); }
     if (f.dataset.kind === 'challenge') { Object.assign(S.challenges[id], r, { finished: today() }); log('chdone', id, r.text); }
     if (f.dataset.kind === 'knowledge') { S.read[id] = r; log('read', id, r.text); closeModal(); }
     save(); render();
-    toast(f.dataset.kind === 'knowledge' ? '記下來了，已加入你的旅程。' : '恭喜完成！已加入你的旅程。', '看我的旅程', () => location.hash = '#/journey');
+    const opened = TOPICS.filter(x => !before.has(x.id) && unlocked(x.id));
+    const base = f.dataset.kind === 'knowledge' ? '記下來了，已加入你的旅程。' : '恭喜完成！已加入你的旅程。';
+    if (opened.length) toast(`${base}解鎖了 ${opened.length} 個新主題：${opened.slice(0, 3).map(x => '「' + x.title + '」').join('')}${opened.length > 3 ? '等' : ''}。`, '看技能樹', () => location.hash = '#/journey');
+    else toast(base, '看我的旅程', () => location.hash = '#/journey');
   });
 }
 function openReflect(kind, id) {
@@ -508,26 +549,26 @@ function buildTree() {
     const list = TOPICS.filter(t => t.tags.includes(tag));
     const ids = new Set(list.map(t => t.id));
     const nb = t => list.filter(x => x.id !== t.id && (t.related.includes(x.id) || x.related.includes(t.id)));
-    const parent = {}, depth = {};
-    // 沿著相關主題往外長：每個連通群組從最入門的主題開始，接到分枝根部
-    const order = list.slice().sort((a, b) => a.diff - b.diff || nb(b).length - nb(a).length);
-    for (const root of order) {
-      if (root.id in depth) continue;
-      parent[root.id] = null; depth[root.id] = 0;
-      let frontier = [root];
-      while (frontier.length) {
-        const next = [];
-        for (const t of frontier) for (const x of nb(t)) if (!(x.id in depth)) { depth[x.id] = depth[t.id] + 1; parent[x.id] = t.id; next.push(x); }
-        frontier = next;
+    // 由淺入深：照 levels.js 的四層排，內圈入門、外圈深入。
+    // 每個節點接到上一層的相關主題；沒有相關的就接到上一層位置最接近的那個
+    const tiers = LEVELS[tag].map(l => l.map(id => T[id]).filter(Boolean));
+    list.forEach(t => { if (!tiers.some(l => l.includes(t))) tiers[tiers.length - 1].push(t); });
+    const parent = {}, posKey = {};
+    tiers.forEach((tier, k) => {
+      if (k > 0) {
+        const prev = tiers[k - 1];
+        tier.forEach(t => { const r = nb(t).filter(x => prev.includes(x)); t._pk = r.length ? r.reduce((s, x) => s + posKey[x.id], 0) / r.length : 0.5; });
+        tier.sort((a, b) => a._pk - b._pk);
       }
-    }
-    const tiers = [];
-    list.forEach(t => (tiers[depth[t.id]] = tiers[depth[t.id]] || []).push(t));
-    const posKey = {};
-    tiers.forEach(tier => {
-      tier.sort((a, b) => (parent[a.id] ? posKey[parent[a.id]] : 0.5) - (parent[b.id] ? posKey[parent[b.id]] : 0.5));
-      tier.forEach((t, j) => posKey[t.id] = tier.length > 1 ? j / (tier.length - 1) : 0.5);
+      tier.forEach((t, j) => {
+        posKey[t.id] = tier.length > 1 ? j / (tier.length - 1) : 0.5;
+        if (k === 0) { parent[t.id] = null; return; }
+        const prev = tiers[k - 1], r = nb(t).filter(x => prev.includes(x));
+        const cand = r.length ? r : prev;
+        parent[t.id] = cand.slice().sort((a, b) => Math.abs(posKey[a.id] - posKey[t.id]) - Math.abs(posKey[b.id] - posKey[t.id]))[0].id;
+      });
     });
+    tiers.flat().forEach(t => delete t._pk);
     out[tag] = { tiers, parent, ids };
   }
   return (treeCache = out);
@@ -602,8 +643,8 @@ function layoutSingle(tag, W) {
 let treeSel = null, treeBranch = null, treeFocus = false;
 function nodeSvg(tag, t, p, col, dim) {
   const T = buildTree()[tag];
-  const n = pts(t), par = T.parent[t.id] ? TOPICS.find(x => x.id === T.parent[t.id]) : null;
-  const locked = n === 0 && par && pts(par) === 0;
+  const n = pts(t);
+  const locked = !unlocked(t.id);
   const st = n >= 5 ? 'full' : n > 0 ? 'part' : locked ? 'locked' : 'open';
   return `<g class="node ${st} ${treeSel === t.id ? 'sel' : ''} ${dim ? 'dim' : ''}" data-node="${t.id}" tabindex="0" role="button" aria-label="${esc(INT[tag])}：${esc(t.title)}，${n}/5" style="--c:${col}" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})">
     <circle r="21" class="ring"/>
@@ -646,6 +687,7 @@ function renderTree(box) {
     const W = 440, { pos, H } = layoutSingle(treeBranch, W);
     vb = `0 0 ${W} ${H}`;
     const tag = treeBranch, col = BRANCH_COL[tag], h = pos['hub-' + tag];
+    T[tag].tiers.forEach((tier, k) => { const p = pos[tag + ':' + tier[0].id]; lines.push(`<text x="8" y="${(p.y + 4).toFixed(1)}" class="lvl ${layerOpen(tag, k) ? '' : 'off'}">${k + 1} ${LEVEL_NAMES[k]}</text>`); });
     T[tag].tiers.flat().forEach(t => {
       const p = pos[tag + ':' + t.id], pp = T[tag].parent[t.id] ? pos[tag + ':' + T[tag].parent[t.id]] : h;
       const lit = pts(t) > 0;
@@ -659,10 +701,10 @@ function renderTree(box) {
   box.innerHTML = `
     ${narrow ? `<div class="row treebar">${treeFocus ? '<button class="btn" id="treeAll">← 回到全部分枝</button>' : ''}<label class="field treepick">分枝<select id="brsel">${BRANCH_ORDER.map(t => `<option value="${t}" ${t === treeBranch ? 'selected' : ''}>${INT[t]}${mine.has(t) ? ' ★' : ''}（${branchPts(t)} 點）</option>`).join('')}</select></label></div>` : ''}
     <div class="treewrap"><svg viewBox="${vb}" class="tree ${narrow ? 'focus' : 'radial'}" role="group" aria-label="技能樹">${lines.join('')}${nodes.join('')}${hubs.join('')}</svg></div>
-    <div class="treelegend"><span><i class="lg full"></i>5/5 完成</span><span><i class="lg part"></i>進行中</span><span><i class="lg open"></i>可以探索</span><span><i class="lg locked"></i>尚未點亮</span><span class="muted">看過 +1、收藏 +1、完成 +3・${narrow ? '★ 是你選的興趣' : '淡色分枝是還沒選、也還沒探索的領域・點分枝中心可以放大'}</span></div>
+    <div class="treelegend"><span><i class="lg full"></i>5/5 完成</span><span><i class="lg part"></i>進行中</span><span><i class="lg open"></i>可以探索</span><span><i class="lg locked"></i>尚未解鎖</span><span class="muted">由內往外：入門 → 基礎 → 進階 → 深入，上一層完成一個就解鎖下一層・看過 +1、收藏 +1、完成 +3・${narrow ? '★ 是你選的興趣' : '淡色分枝是還沒選、也還沒探索的領域・點分枝中心可以放大'}</span></div>
     <div class="treeinfo">${sel ? (() => { const n = pts(sel), d = donePts(sel); return `<div class="tsel cat-${sel.cat}"><span class="ticon">${icon(sel.id, 26)}</span><div><p class="kicker"><span class="cat">${CATS[sel.cat].en}</span><span>${n}/5</span><span>${sel.tags.map(g => INT[g]).join('・')}</span></p><h3>${esc(sel.title)}</h3>
       <ul class="pts"><li class="${S.viewed[sel.id] ? 'ok' : ''}">看過 +1</li><li class="${S.saved[sel.id] ? 'ok' : ''}">收藏 +1</li><li class="${d ? 'ok' : ''}">${sel.cat === 'knowledge' ? '讀完' : sel.cat === 'hobby' ? '七天挑戰' : '完成體驗'} +${d}/3</li></ul>
-      <a class="btn primary" href="#/topic/${sel.id}">前往主題</a></div></div>`; })() : '<p class="muted">點一個節點看詳細進度。</p>'}</div>`;
+      ${unlocked(sel.id) ? `<a class="btn primary" href="#/topic/${sel.id}">前往主題</a>` : `<p class="lockline">🔒 ${esc(unlockHint(sel.id))}</p>`}</div></div>`; })() : '<p class="muted">點一個節點看詳細進度。</p>'}</div>`;
   $$('[data-node]', box).forEach(g => {
     const pick = () => { treeSel = g.dataset.node; renderTree(box); };
     g.addEventListener('click', pick);

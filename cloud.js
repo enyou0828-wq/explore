@@ -75,18 +75,30 @@ async function logout() {
 
 // ---------- 同步 ----------
 let loaded = false, timer = null, pending = false;
+// 這台裝置第一次登入某個帳號：雲端優先（雲端有資料就用雲端的）。
+// 之後同一個帳號再打開：比較修改時間，本機比較新就上傳、雲端比較新才下載，避免剛做的動作被舊資料蓋掉。
+const LINK = 'explore-linked-uid';
+const linkedTo = () => { try { return localStorage.getItem(LINK); } catch { return null; } };
+const setLinked = uid => { try { localStorage.setItem(LINK, uid); } catch { /* 略過 */ } };
 async function pull(uid) {
   loaded = false;
   setMsg('正在讀取雲端進度…', true);
   try {
     const snap = await getDoc(doc(db, 'explore', uid));
-    if (snap.exists() && snap.data().state) {
-      window.EXPLORE.replaceState(JSON.parse(snap.data().state));
-      loaded = true;
+    const cloud = snap.exists() && snap.data().state ? snap.data() : null;
+    const local = window.EXPLORE.state;
+    const linked = linkedTo() === uid;
+    loaded = true;
+    if (cloud && !(linked && (local.ts || 0) > (cloud.ts || 0))) {
+      window.EXPLORE.replaceState(JSON.parse(cloud.state));
+      setLinked(uid);
       setMsg('已同步');
+    } else if (local.profile) {
+      await push();
+      setLinked(uid);
     } else {
-      loaded = true;
-      if (window.EXPLORE.state.profile) await push(); else setMsg('已登入，完成問卷後會自動存到雲端');
+      setLinked(uid);
+      setMsg('已登入，完成問卷後會自動存到雲端');
     }
   } catch (e) { console.error(e); setMsg('讀取雲端失敗：' + errText(e)); }
 }
@@ -94,11 +106,12 @@ async function push() {
   const u = auth.currentUser;
   if (!u || !loaded) return;
   clearTimeout(timer); pending = false;
+  const st = window.EXPLORE.state;
   try {
     // 整份狀態存成一個 JSON 字串：主題 id 當 key 的物件很多，存字串最省事也不會碰到 Firestore 欄位限制
-    await setDoc(doc(db, 'explore', u.uid), { state: JSON.stringify(window.EXPLORE.state), updatedAt: new Date().toISOString() });
+    await setDoc(doc(db, 'explore', u.uid), { state: JSON.stringify(st), ts: st.ts || Date.now(), updatedAt: new Date().toISOString() });
     setMsg('已同步');
-  } catch (e) { console.error(e); setMsg('同步失敗：' + errText(e)); }
+  } catch (e) { pending = true; console.error(e); setMsg('同步失敗：' + errText(e)); }
 }
 const flush = () => pending ? push() : Promise.resolve();
 window.cloudPush = () => {
