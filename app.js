@@ -5,7 +5,7 @@ const KEY = 'explore-v1';
 // 重置版本：改這個值，所有使用者下次打開時本機進度都會清空、從問卷重來；雲端的舊資料也不會再被讀回來（見 cloud.js）
 const RESET_ID = '2026-11-21';
 const READ_V = 2; // 讀完流程改成「小測驗＋用自己的話講」：舊的「我讀完了」紀錄不保留（2026-11-27 使用者決定）
-const blank = () => ({ rv: RESET_ID, readV: READ_V, profile: null, first: null, saved: {}, dismissed: {}, viewed: {}, read: {}, challenges: {}, exps: {}, logs: [], style: 'magazine', events: [], daily: null, fresh: [] });
+const blank = () => ({ rv: RESET_ID, readV: READ_V, profile: null, first: null, saved: {}, dismissed: {}, viewed: {}, read: {}, challenges: {}, exps: {}, logs: [], style: 'magazine', art: 'auto', events: [], daily: null, fresh: [] });
 function migrate(d) {
   const o = Object.assign(blank(), d || {});
   if ((d || {}).readV !== READ_V) { o.read = {}; o.readV = READ_V; }
@@ -95,7 +95,10 @@ function setStyle(k) {
   S.style = k; save(); render();
   toast(`視覺風格：${STYLE_NAME[k]}${window.CLOUD?.user ? '，會同步到你的帳號' : ''}`);
 }
-function visual(t, cls = '') {
+const curArt = () => ART_NAME[S.art] && S.art !== 'auto' ? S.art : null;
+const artTag = () => curArt() ? `<span class="artlbl">${ART_NAME[curArt()]}</span>` : '';
+function visual(t, cls = '', school = curArt()) {
+  if (school && school !== 'auto' && ART[school]) return artSvg(t, school, cls, `${esc(t.title)}，${ART_NAME[school]}風格插圖`);
   const r = rng(hash(t.id));
   const [a, b, bg, c] = PALS[curStyle()][t.cat];
   const kind = hash(t.id + 'k') % 5;
@@ -222,7 +225,7 @@ function whyText(t) {
 function card(t, opts = {}) {
   const saved = !!S.saved[t.id], lock = !unlocked(t.id);
   return `<article class="card ${opts.big ? 'big' : ''} ${lock ? 'locked' : ''} cat-${t.cat}">
-    <a href="#/topic/${t.id}" class="cimg" aria-label="${esc(t.title)}">${visual(t)}</a>
+    <a href="#/topic/${t.id}" class="cimg" aria-label="${esc(t.title)}">${visual(t)}${artTag()}</a>
     <div class="cbody">
       <div class="kicker"><span class="cat">${CATS[t.cat].en}</span><span>${esc(t.time)}</span><span title="難度：${diffLabel(t.diff)}">${dots(t.diff)} ${diffLabel(t.diff)}</span></div>
       <h3><a href="#/topic/${t.id}">${esc(t.title)}</a></h3>
@@ -435,6 +438,7 @@ function renderTopic(app, id) {
           <div class="actions">${action}<button class="btn icon ${saved ? 'on' : ''}" id="saveT">${saved ? '♥ 已收藏' : '♡ 收藏'}</button><a class="btn ghost" href="#related">延伸探索 ↓</a></div>
         </div>
       </header>
+      ${curArt() ? `<p class="artnote"><b>插圖畫風：${ART_NAME[curArt()]}</b>　${esc(ART_DESC[curArt()])}${ART_TOPIC[curArt()] && ART_TOPIC[curArt()] !== id ? `　<a href="#/topic/${ART_TOPIC[curArt()]}">認識${ART_NAME[curArt()]} →</a>` : ''}</p>` : ''}
 
       <section class="block intro"><h2 class="sec">簡介</h2><p class="dropcap">${esc(t.intro)}</p></section>
       <section class="block"><h2 class="sec">為什麼有趣</h2><ul class="whylist">${t.why.map(w => `<li>${esc(w)}</li>`).join('')}</ul></section>
@@ -743,6 +747,12 @@ function renderJourney(app) {
         <span class="nm"><b>${n}${k === curStyle() ? '・使用中' : ''}</b><span>${d}</span></span></button>`).join('')}</div>
       <p class="muted small" style="margin-top:10px">登入 Google 後，選好的風格會跟著帳號同步到其他裝置。頂部的 <span aria-hidden="true">◐</span> 按鈕也可以快速輪換。</p>
     </section>
+    <section class="block settings" id="artbox"><h2 class="sec">插圖畫派</h2>
+      <p class="muted small" style="margin-bottom:12px">每個主題都有一幅固定的風景，換畫派就是用不同的畫法重畫同一幅畫。可以和上面的介面風格任意搭配。</p>
+      <div class="stylegrid artgrid">${(() => { const sample = T[Object.keys(S.viewed).find(id => T[id]) || 'sunrise'] || TOPICS[0]; const cur = curArt() || 'auto'; return ART_SCHOOLS.map(([k, n, d]) => `<button type="button" class="stylepick artpick" data-art="${k}" aria-pressed="${k === cur}">
+        <span class="apv">${visual(sample, '', k === 'auto' ? null : k)}</span>
+        <span class="nm"><b>${n}${k === cur ? '・使用中' : ''}</b><span>${esc(k === 'auto' ? d : d.split('，')[0])}</span></span></button>`).join(''); })()}</div>
+    </section>
     <section class="block settings"><h2 class="sec">設定</h2>
       <div class="actions"><a class="btn" href="#/onboard">修改興趣與偏好</a><button class="btn" id="exp">匯出備份</button><label class="btn">匯入備份<input type="file" id="imp" accept="application/json" hidden></label><button class="btn danger" id="wipe">清除所有資料</button></div>
     </section>
@@ -751,6 +761,7 @@ function renderJourney(app) {
   bindStudy(app);
   STYLES.forEach(([k]) => loadStyleFonts(k));
   $$('[data-pick]', app).forEach(b => b.onclick = () => setStyle(b.dataset.pick));
+  $$('[data-art]', app).forEach(b => b.onclick = () => { const k = b.dataset.art; if (k === (curArt() || 'auto')) return; S.art = k; save(); render(); toast(k === 'auto' ? '插圖改回跟隨介面風格。' : `插圖畫派：${ART_NAME[k]}${window.CLOUD?.user ? '，會同步到你的帳號' : ''}`, k === 'auto' ? null : '看首頁', () => location.hash = '#/home'); });
   renderTree($('#tree'));
   $('#exp').onclick = () => {
     const a = document.createElement('a');
