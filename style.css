@@ -1,13 +1,14 @@
-/* EXPLORE：文藝雜誌風。米白紙張、襯線大標、三分類各一個飽和色。 */
-:root {
+/* EXPLORE：預設「文藝雜誌」風。其他視覺風格在 themes.css，以 <html data-style="…"> 切換。
+   --r 卡片圓角、--rb 按鈕圓角、--bw 邊框粗細、--sh 卡片陰影、--hw 大標字重 */
+:root, [data-style="magazine"] {
   --paper: #f4efe6; --paper2: #ebe4d6; --card: #fbf8f2; --ink: #1d1b18; --muted: #6f675c; --line: #d9d0c0;
   --k: #22406b; --h: #b4532a; --e: #55632b; --gold: #b08a2e;
   --serif: "Noto Serif TC", "Songti TC", serif; --sans: "Noto Sans TC", "PingFang TC", system-ui, sans-serif; --latin: "Cormorant Garamond", Georgia, serif;
+  --r: 0px; --rb: 0px; --bw: 1px; --sh: none; --hw: 900; color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --paper: #17150f; --paper2: #211e17; --card: #1e1b15; --ink: #ede6d8; --muted: #a59b8a; --line: #3a3428; --k: #8fb0dd; --h: #e48a5f; --e: #b3c27a; --gold: #d8b45a; color-scheme: dark; }
+  :root:not([data-style]), [data-style="magazine"] { --paper: #17150f; --paper2: #211e17; --card: #1e1b15; --ink: #ede6d8; --muted: #a59b8a; --line: #3a3428; --k: #8fb0dd; --h: #e48a5f; --e: #b3c27a; --gold: #d8b45a; color-scheme: dark; }
 }
-:root[data-theme="dark"] { --paper: #17150f; --paper2: #211e17; --card: #1e1b15; --ink: #ede6d8; --muted: #a59b8a; --line: #3a3428; --k: #8fb0dd; --h: #e48a5f; --e: #b3c27a; --gold: #d8b45a; color-scheme: dark; }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.75 var(--sans); }
@@ -354,3 +355,28 @@ svg.tree { display: block; width: 100%; height: auto; }
 .btn[hidden], .qex[hidden] { display: none; }
 .sheet.quiz, .sheet.logform { padding-top: 16px; }
 #study, #studylog, #related, #do { scroll-margin-top: 80px; }
+
+/* 視覺風格共用：卡片類元件吃圓角、陰影、邊框粗細 token（預設風格下都是 0 / none / 1px，看起來不變） */
+.card, .nextlist li, .steps label, .book, .done-item, .mini, .digcard, .dhero, .treewrap, .tsel, .qopt, .reflect, .day, .local, .sheet, .surprise, blockquote.refl, .concept, .slog { border-radius: var(--r); box-shadow: var(--sh); }
+.card, .nextlist li, .steps label, .book, .done-item, .mini, .digcard, .dhero, .treewrap, .tsel, .qopt, .reflect, .day, .local { border-width: var(--bw); }
+.card, .dhero { overflow: hidden; }
+.btn, .chip, .chips .opt span, .rate span, .pts li, .done-tag, .acct:not([data-state="in"]), #q, textarea, .q input[name="name"], .logform select, .logform input { border-radius: var(--rb); }
+.btn, .chip, .chips .opt span { border-width: var(--bw); }
+.hero h1, .dtitle h1, .feature .card.big h3 { font-weight: var(--hw); }
+.stylebtn { font: inherit; background: none; border: 0; color: var(--muted); width: 32px; height: 32px; display: grid; place-items: center; cursor: pointer; padding: 0; margin-left: 2px; }
+.stylebtn:hover { color: var(--ink); }
+.stylebtn svg { width: 20px; height: 20px; }
+/* 旅程頁的風格選擇 */
+.stylegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+.stylepick { font: inherit; text-align: left; padding: 0; border: 2px solid transparent; background: none; cursor: pointer; display: grid; gap: 8px; color: var(--ink); }
+.stylepick[aria-pressed="true"] { border-color: var(--gold); }
+.stylepick .pv { display: block; background: var(--paper); color: var(--ink); padding: 14px; min-height: 128px; border: 1px solid var(--line); font-family: var(--sans); }
+.stylepick .pv b { display: block; font-family: var(--latin); font-size: 15px; letter-spacing: .2em; }
+.stylepick .pv .pc { display: block; margin-top: 10px; background: var(--card); border: var(--bw) solid var(--line); border-radius: var(--r); box-shadow: var(--sh); padding: 8px 10px; }
+.stylepick .pv .pt { display: block; font-family: var(--serif); font-weight: var(--hw); font-size: 16px; }
+.stylepick .pv .pb { display: flex; gap: 4px; margin-top: 6px; }
+.stylepick .pv .pb i { display: block; height: 6px; flex: 1; border-radius: 3px; }
+.stylepick .pv .pbtn { display: inline-block; margin-top: 8px; font-size: 11px; padding: 3px 10px; background: var(--ink); color: var(--paper); border-radius: var(--rb); }
+.stylepick .nm { padding: 0 8px 8px; }
+.stylepick .nm b { display: block; font-size: 15px; }
+.stylepick .nm span { font-size: 13px; color: var(--muted); }

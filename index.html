@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,600;1,500&display=swap">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="themes.css">
+<script>try { var st = JSON.parse(localStorage.getItem('explore-v1') || '{}').style; document.documentElement.dataset.style = st || 'magazine'; } catch (e) { document.documentElement.dataset.style = 'magazine'; }</script>
 </head>
 <body>
 <header class="top">
@@ -18,6 +20,7 @@
       <a href="#/home" data-p="home">今日</a>
       <a href="#/discover" data-p="discover">探索</a>
       <a href="#/journey" data-p="journey">我的旅程</a>
+      <button type="button" id="styleBtn" class="stylebtn" aria-label="切換視覺風格" title="切換視覺風格"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg></button>
       <button type="button" id="acct" class="acct" hidden></button>
     </nav>
   </div>

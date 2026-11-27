@@ -1,0 +1,117 @@
+/* EXPLORE 視覺風格。token 寫在 [data-style="…"] 上（html 或旅程頁的預覽小卡都適用），
+   只對整頁生效的元件調整寫在 html[data-style="…"] 底下。字型由 app.js 依風格動態載入。 */
+
+/* ===== 極簡白：純白、圓角、輕陰影；跟隨系統深色 ===== */
+[data-style="minimal"] {
+  --paper: #f5f5f7; --paper2: #e8e8ed; --card: #ffffff; --ink: #1d1d1f; --muted: #6e6e73; --line: #e3e3e8;
+  --k: #0066cc; --h: #e0522d; --e: #248a52; --gold: #0071e3;
+  --serif: "Inter", "Noto Sans TC", "PingFang TC", system-ui, sans-serif; --sans: "Inter", "Noto Sans TC", "PingFang TC", system-ui, sans-serif; --latin: "Inter", system-ui, sans-serif;
+  --r: 18px; --rb: 980px; --bw: 1px; --sh: 0 2px 14px rgba(0, 0, 0, .06); --hw: 700; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  [data-style="minimal"] { --paper: #000000; --paper2: #1c1c1e; --card: #1c1c1e; --ink: #f5f5f7; --muted: #a1a1a6; --line: #2c2c2e; --k: #4ba3ff; --h: #ff7a59; --e: #4cc38a; --gold: #2997ff; --sh: none; color-scheme: dark; }
+}
+html[data-style="minimal"] .eyebrow, html[data-style="minimal"] .tagline, html[data-style="minimal"] .why span, html[data-style="minimal"] .book .author { font-style: normal; }
+html[data-style="minimal"] .eyebrow { font-size: 15px; font-weight: 600; }
+html[data-style="minimal"] h2.sec { border-top: 0; padding-top: 0; letter-spacing: .08em; font-size: 13px; }
+html[data-style="minimal"] .top { border-bottom-color: var(--line); }
+html[data-style="minimal"] .logo { font-weight: 700; letter-spacing: .18em; }
+html[data-style="minimal"] .card, html[data-style="minimal"] .dhero, html[data-style="minimal"] .digcard { border-color: transparent; }
+html[data-style="minimal"] .stats { border-top: 0; background: var(--card); border-radius: var(--r); border-bottom: 0; }
+html[data-style="minimal"] .q { border-top-color: var(--line); }
+html[data-style="minimal"] .dropcap::first-letter { font-weight: 700; }
+
+/* ===== 日系手帳：方格紙、手寫感字體、紙膠帶 ===== */
+[data-style="notebook"] {
+  --paper: #fbf6e9; --paper2: #f1e8d2; --card: #fffdf6; --ink: #3d362c; --muted: #857a68; --line: #e3d7bd;
+  --k: #4f7aa6; --h: #cc6b5c; --e: #63895a; --gold: #c99632;
+  --serif: "LXGW WenKai TC", "Kaiti TC", serif; --sans: "LXGW WenKai TC", "Noto Sans TC", "PingFang TC", sans-serif; --latin: "Caveat", "LXGW WenKai TC", cursive;
+  --r: 6px; --rb: 20px; --bw: 1px; --sh: 2px 3px 0 rgba(120, 96, 50, .12); --hw: 700; color-scheme: light;
+}
+html[data-style="notebook"] body { background-color: var(--paper); background-image: linear-gradient(#ecdfc2 1px, transparent 1px), linear-gradient(90deg, #ecdfc2 1px, transparent 1px); background-size: 26px 26px; }
+html[data-style="notebook"] .top { background: color-mix(in srgb, var(--paper) 94%, transparent); border-bottom: 2px dashed var(--line); }
+html[data-style="notebook"] .logo { letter-spacing: .12em; font-size: 30px; }
+html[data-style="notebook"] h2.sec { font-size: 22px; letter-spacing: .06em; text-transform: none; border-top: 2px dashed var(--line); color: var(--ink); }
+html[data-style="notebook"] .eyebrow, html[data-style="notebook"] .tagline { font-style: normal; font-size: 22px; }
+html[data-style="notebook"] .card { overflow: visible; position: relative; border-style: solid; }
+html[data-style="notebook"] .card .cimg { border-radius: var(--r) var(--r) 0 0; }
+html[data-style="notebook"] .card::before { content: ""; position: absolute; top: -9px; left: 50%; width: 76px; height: 20px; transform: translateX(-50%) rotate(-3deg); background: color-mix(in srgb, var(--c) 30%, transparent); z-index: 1; pointer-events: none; }
+html[data-style="notebook"] .card:nth-child(even)::before { transform: translateX(-50%) rotate(2.5deg); }
+html[data-style="notebook"] .dhero { border: 1px solid var(--line); }
+html[data-style="notebook"] .nextlist li, html[data-style="notebook"] .steps label, html[data-style="notebook"] .slog, html[data-style="notebook"] .qopt { border-style: dashed; }
+html[data-style="notebook"] .stats, html[data-style="notebook"] .q { border-top: 2px dashed var(--line); }
+html[data-style="notebook"] .btn.primary { background: var(--k); border-color: var(--k); color: #fffdf6; }
+html[data-style="notebook"] .chip.on, html[data-style="notebook"] .chips .opt input:checked + span { background: var(--k); border-color: var(--k); color: #fffdf6; }
+html[data-style="notebook"] .stats b, html[data-style="notebook"] .facts li::before, html[data-style="notebook"] .concept .cn { font-size: 40px; }
+
+/* ===== 繽紛活潑：飽和色塊、粗黑框、硬陰影 ===== */
+[data-style="pop"] {
+  --paper: #fff4d6; --paper2: #ffe6a8; --card: #ffffff; --ink: #121212; --muted: #4d4d4d; --line: #121212;
+  --k: #3d5afe; --h: #ff4f2e; --e: #0e9f4f; --gold: #ffb300;
+  --serif: "Noto Sans TC", "PingFang TC", sans-serif; --sans: "Noto Sans TC", "PingFang TC", sans-serif; --latin: "Bricolage Grotesque", "Noto Sans TC", sans-serif;
+  --r: 14px; --rb: 12px; --bw: 2.5px; --sh: 4px 4px 0 #121212; --hw: 900; color-scheme: light;
+}
+html[data-style="pop"] .top { border-bottom: 3px solid var(--ink); background: var(--gold); backdrop-filter: none; }
+html[data-style="pop"] .logo { font-weight: 800; letter-spacing: .1em; }
+html[data-style="pop"] .nav a { color: var(--ink); }
+html[data-style="pop"] .nav a[aria-current="page"] { background: var(--ink); color: var(--gold); border-radius: 8px; border-bottom-color: transparent; }
+html[data-style="pop"] h2.sec { font-weight: 800; color: var(--ink); letter-spacing: .12em; border-top: 0; padding-top: 0; }
+html[data-style="pop"] h2.sec::before { content: ""; display: inline-block; width: 14px; height: 14px; background: var(--h); border: 2px solid var(--ink); border-radius: 50%; margin-right: 8px; vertical-align: -1px; }
+html[data-style="pop"] .eyebrow, html[data-style="pop"] .tagline, html[data-style="pop"] .why span { font-style: normal; font-weight: 800; }
+html[data-style="pop"] .btn { box-shadow: 3px 3px 0 var(--ink); font-weight: 700; transition: transform .08s, box-shadow .08s; }
+html[data-style="pop"] .btn:active { transform: translate(3px, 3px); box-shadow: none; }
+html[data-style="pop"] .btn.primary { background: var(--h); color: #fff; border-color: var(--ink); }
+html[data-style="pop"] .btn.ghost { border-color: var(--ink); color: var(--ink); background: var(--card); }
+html[data-style="pop"] .card .cimg, html[data-style="pop"] .feature .card.big .cimg { border-color: var(--ink); border-width: 2.5px; }
+html[data-style="pop"] .stats { border: 2.5px solid var(--ink); border-radius: var(--r); background: var(--card); box-shadow: var(--sh); }
+html[data-style="pop"] .stats div { border-color: var(--ink); }
+html[data-style="pop"] .stats b { font-weight: 800; }
+html[data-style="pop"] .concept, html[data-style="pop"] .slog, html[data-style="pop"] .sstats { border-color: var(--ink); }
+html[data-style="pop"] .chip, html[data-style="pop"] .chips .opt span, html[data-style="pop"] .qopt { border-color: var(--ink); }
+html[data-style="pop"] .chip.on, html[data-style="pop"] .chips .opt input:checked + span { background: var(--k); color: #fff; }
+html[data-style="pop"] .hero { border-bottom: 3px solid var(--ink); }
+html[data-style="pop"] .treewrap { border-color: var(--ink); }
+
+/* ===== 太空科技：純黑底、細線、大寫寬字距 ===== */
+[data-style="space"] {
+  --paper: #000000; --paper2: #141414; --card: #0b0b0b; --ink: #f2f2f2; --muted: #8e8e8e; --line: #2b2b2b;
+  --k: #7fa7ff; --h: #ff7a45; --e: #8fd694; --gold: #ffffff;
+  --serif: "Barlow", "Noto Sans TC", "PingFang TC", sans-serif; --sans: "Barlow", "Noto Sans TC", "PingFang TC", sans-serif; --latin: "Barlow", sans-serif;
+  --r: 0px; --rb: 0px; --bw: 1px; --sh: none; --hw: 600; color-scheme: dark;
+}
+html[data-style="space"] .top { background: rgba(0, 0, 0, .82); border-bottom: 1px solid var(--line); }
+html[data-style="space"] .logo { font-weight: 500; letter-spacing: .45em; font-size: 22px; }
+html[data-style="space"] .nav a { text-transform: uppercase; letter-spacing: .12em; font-size: 14px; }
+html[data-style="space"] .hero h1, html[data-style="space"] .dtitle h1 { text-transform: uppercase; letter-spacing: .06em; }
+html[data-style="space"] .masthead { font-weight: 500; letter-spacing: .4em; }
+html[data-style="space"] .eyebrow, html[data-style="space"] .tagline, html[data-style="space"] .why span, html[data-style="space"] .book .author { font-style: normal; text-transform: uppercase; letter-spacing: .2em; font-size: 13px; }
+html[data-style="space"] h2.sec { letter-spacing: .35em; font-weight: 500; border-top: 1px solid var(--line); color: var(--ink); }
+html[data-style="space"] .btn { text-transform: uppercase; letter-spacing: .16em; font-size: 12.5px; padding: 11px 20px; border-color: var(--ink); transition: background .15s, color .15s; }
+html[data-style="space"] .btn:hover { background: var(--ink); color: var(--paper); }
+html[data-style="space"] .btn.primary { background: transparent; color: var(--ink); }
+html[data-style="space"] .btn.primary:hover { background: var(--ink); color: var(--paper); }
+html[data-style="space"] .btn.ghost { border-color: var(--line); }
+html[data-style="space"] .card, html[data-style="space"] .dhero, html[data-style="space"] .digcard { border-color: var(--line); }
+html[data-style="space"] .kicker .cat, html[data-style="space"] .stats span, html[data-style="space"] .sstats span { text-transform: uppercase; letter-spacing: .22em; }
+html[data-style="space"] .stats { border-top: 1px solid var(--line); }
+html[data-style="space"] .stats b { font-weight: 300; font-size: 46px; }
+html[data-style="space"] .chip.on, html[data-style="space"] .chips .opt input:checked + span { background: var(--ink); color: var(--paper); }
+html[data-style="space"] .card.locked .cimg { filter: grayscale(1) opacity(.35); }
+html[data-style="space"] .tree .node, html[data-style="space"] .tree .hub:not(.you) { --c2: color-mix(in srgb, var(--c) 55%, #ffffff); }
+html[data-style="space"] .tree .node.part .ring, html[data-style="space"] .tree .node.part .badge { stroke: var(--c2); }
+html[data-style="space"] .tree .node.part .ic, html[data-style="space"] .tree .node.part text { color: var(--c2); fill: var(--c2); }
+html[data-style="space"] .tree .node.full .ring, html[data-style="space"] .tree .node.full .badge, html[data-style="space"] .tree .hub:not(.you) .ring { fill: var(--c2); stroke: var(--c2); }
+html[data-style="space"] .tree .node.full .ic, html[data-style="space"] .tree .node.full text, html[data-style="space"] .tree .hub:not(.you) .hn, html[data-style="space"] .tree .hub:not(.you) .hv { color: #000; fill: #000; }
+html[data-style="space"] .tree line[stroke^="#"] { filter: brightness(2.2) saturate(.8); }
+/* 手機寬度：頂部要擠得下 logo、三個分頁、風格按鈕、登入 */
+@media (max-width: 480px) {
+  .topin { gap: 6px; padding: 10px 12px; }
+  .logo { font-size: 19px; letter-spacing: .12em; }
+  .nav { gap: 0; }
+  .nav a { padding: 6px 6px; font-size: 14px; }
+  .stylebtn { width: 28px; margin-left: 0; }
+  .acct { padding: 5px 7px; font-size: 13px; }
+  html[data-style="notebook"] .logo { font-size: 24px; letter-spacing: .06em; }
+  html[data-style="space"] .logo { font-size: 17px; letter-spacing: .22em; }
+  html[data-style="space"] .nav a { letter-spacing: .02em; font-size: 13px; padding: 6px 5px; }
+}

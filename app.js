@@ -5,7 +5,7 @@ const KEY = 'explore-v1';
 // 重置版本：改這個值，所有使用者下次打開時本機進度都會清空、從問卷重來；雲端的舊資料也不會再被讀回來（見 cloud.js）
 const RESET_ID = '2026-11-21';
 const READ_V = 2; // 讀完流程改成「小測驗＋用自己的話講」：舊的「我讀完了」紀錄不保留（2026-11-27 使用者決定）
-const blank = () => ({ rv: RESET_ID, readV: READ_V, profile: null, first: null, saved: {}, dismissed: {}, viewed: {}, read: {}, challenges: {}, exps: {}, logs: [], events: [], daily: null, fresh: [] });
+const blank = () => ({ rv: RESET_ID, readV: READ_V, profile: null, first: null, saved: {}, dismissed: {}, viewed: {}, read: {}, challenges: {}, exps: {}, logs: [], style: 'magazine', events: [], daily: null, fresh: [] });
 function migrate(d) {
   const o = Object.assign(blank(), d || {});
   if ((d || {}).readV !== READ_V) { o.read = {}; o.readV = READ_V; }
@@ -55,14 +55,49 @@ function log(type, id, text = '') {
 }
 
 // ================= 抽象視覺（依主題產生，不用圖片） =================
-const PAL = {
-  knowledge: ['#22406b', '#c9a227', '#e8dfcf', '#8aa1c1'],
-  hobby: ['#b4532a', '#253a52', '#efe3cf', '#e2a372'],
-  experience: ['#55632b', '#d98c3f', '#ece4d2', '#a9b46b'],
+// 每種視覺風格一組抽象圖配色：[主色, 對比色, 底色, 輔色]
+const PALS = {
+  magazine: { knowledge: ['#22406b', '#c9a227', '#e8dfcf', '#8aa1c1'], hobby: ['#b4532a', '#253a52', '#efe3cf', '#e2a372'], experience: ['#55632b', '#d98c3f', '#ece4d2', '#a9b46b'] },
+  minimal: { knowledge: ['#0071e3', '#1d1d1f', '#eef4fb', '#a8cdf5'], hobby: ['#ff6b3d', '#1d1d1f', '#fdf1ec', '#ffc3ad'], experience: ['#30a46c', '#1d1d1f', '#edf8f2', '#a6e0c0'] },
+  notebook: { knowledge: ['#8fb0d4', '#4f7aa6', '#fbf6e9', '#e9d9b4'], hobby: ['#e8a598', '#cc6b5c', '#fbf6e9', '#f2d6a2'], experience: ['#a9c49a', '#63895a', '#fbf6e9', '#efd9a8'] },
+  pop: { knowledge: ['#3d5afe', '#121212', '#fff4d6', '#ffb300'], hobby: ['#ff4f2e', '#121212', '#ffe6a8', '#3d5afe'], experience: ['#0e9f4f', '#121212', '#fff4d6', '#ff4f2e'] },
+  space: { knowledge: ['#1c1c1c', '#7fa7ff', '#000000', '#3a3a3a'], hobby: ['#1c1c1c', '#ff7a45', '#000000', '#3a3a3a'], experience: ['#1c1c1c', '#8fd694', '#000000', '#3a3a3a'] },
 };
+// ================= 視覺風格 =================
+const STYLES = [
+  ['magazine', '文藝雜誌', '米白紙張、襯線大標，像翻一本雜誌'],
+  ['minimal', '極簡白', '純白、圓角、輕陰影，乾淨俐落'],
+  ['notebook', '日系手帳', '方格紙、手寫感字體、紙膠帶'],
+  ['pop', '繽紛活潑', '飽和色塊、粗黑框、硬陰影'],
+  ['space', '太空科技', '純黑底、細線、大寫寬字距'],
+];
+const STYLE_NAME = Object.fromEntries(STYLES.map(([k, n]) => [k, n]));
+const STYLE_FONTS = {
+  minimal: 'family=Inter:wght@400;600;700',
+  notebook: 'family=LXGW+WenKai+TC:wght@400;700&family=Caveat:wght@600',
+  pop: 'family=Bricolage+Grotesque:wght@600;800',
+  space: 'family=Barlow:wght@300;400;500;600',
+};
+const curStyle = () => STYLE_NAME[S.style] ? S.style : 'magazine';
+function loadStyleFonts(k) {
+  if (!STYLE_FONTS[k] || document.getElementById('font-' + k)) return;
+  const l = document.createElement('link');
+  l.id = 'font-' + k; l.rel = 'stylesheet'; l.href = `https://fonts.googleapis.com/css2?${STYLE_FONTS[k]}&display=swap`;
+  document.head.appendChild(l);
+}
+function applyStyle() {
+  const k = curStyle();
+  loadStyleFonts(k);
+  if (document.documentElement.dataset.style !== k) document.documentElement.dataset.style = k;
+}
+function setStyle(k) {
+  if (!STYLE_NAME[k] || k === curStyle()) return;
+  S.style = k; save(); render();
+  toast(`視覺風格：${STYLE_NAME[k]}${window.CLOUD?.user ? '，會同步到你的帳號' : ''}`);
+}
 function visual(t, cls = '') {
   const r = rng(hash(t.id));
-  const [a, b, bg, c] = PAL[t.cat];
+  const [a, b, bg, c] = PALS[curStyle()][t.cat];
   const kind = hash(t.id + 'k') % 5;
   let g = '';
   if (kind === 0) { // 同心圓
@@ -218,6 +253,7 @@ function route() {
   return { page: page || 'home', id };
 }
 function render() {
+  applyStyle();
   const app = $('#app');
   const { page, id } = route();
   if (!S.profile || page === 'onboard') { renderOnboard(app); setNav(''); window.cloudPaint?.(); return; }
@@ -683,12 +719,20 @@ function renderJourney(app) {
     <section class="block"><h2 class="sec">時間軸</h2>
       <div class="timeline">${Object.entries(groups).map(([d, es]) => `<div class="tday"><h3>${md(d)}</h3><ul>${es.map(e => `<li><span class="dot ${e.id ? 'cat-' + T[e.id]?.cat : ''}"></span>${EV[e.type] || e.type}${e.id && T[e.id] ? `<a href="#/topic/${e.id}">「${esc(T[e.id].title)}」</a>` : ''}${e.type === 'day' ? ` <span class="muted">${esc(e.text)}</span>` : ''}</li>`).join('')}</ul></div>`).join('') || '<p class="muted">還沒有紀錄。</p>'}</div>
     </section>
+    <section class="block settings" id="stylebox"><h2 class="sec">視覺風格</h2>
+      <div class="stylegrid">${STYLES.map(([k, n, d]) => `<button type="button" class="stylepick" data-pick="${k}" aria-pressed="${k === curStyle()}">
+        <span class="pv" data-style="${k}"><b>EXPLORE</b><span class="pc"><span class="pt">睡眠的科學</span><span class="pb"><i style="background:var(--k)"></i><i style="background:var(--h)"></i><i style="background:var(--e)"></i></span><span class="pbtn">開始探索</span></span></span>
+        <span class="nm"><b>${n}${k === curStyle() ? '・使用中' : ''}</b><span>${d}</span></span></button>`).join('')}</div>
+      <p class="muted small" style="margin-top:10px">登入 Google 後，選好的風格會跟著帳號同步到其他裝置。頂部的 <span aria-hidden="true">◐</span> 按鈕也可以快速輪換。</p>
+    </section>
     <section class="block settings"><h2 class="sec">設定</h2>
       <div class="actions"><a class="btn" href="#/onboard">修改興趣與偏好</a><button class="btn" id="exp">匯出備份</button><label class="btn">匯入備份<input type="file" id="imp" accept="application/json" hidden></label><button class="btn danger" id="wipe">清除所有資料</button></div>
     </section>
     <section class="block settings" id="acctBox"><h2 class="sec">帳號與同步</h2><div data-acct="settings"></div></section>`;
   bindCards(app);
   bindStudy(app);
+  STYLES.forEach(([k]) => loadStyleFonts(k));
+  $$('[data-pick]', app).forEach(b => b.onclick = () => setStyle(b.dataset.pick));
   renderTree($('#tree'));
   $('#exp').onclick = () => {
     const a = document.createElement('a');
@@ -891,5 +935,6 @@ function renderTree(box) {
 }
 window.addEventListener('resize', () => { const b = $('#tree'); if (b) renderTree(b); });
 
+$('#styleBtn')?.addEventListener('click', () => { const i = STYLES.findIndex(([k]) => k === curStyle()); setStyle(STYLES[(i + 1) % STYLES.length][0]); });
 render();
 if (wasReset) toast('EXPLORE 改版了：所有進度已重置，請重新填一次問卷。');
