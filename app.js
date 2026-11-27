@@ -61,7 +61,7 @@ const PALS = {
   minimal: { knowledge: ['#0071e3', '#1d1d1f', '#eef4fb', '#a8cdf5'], hobby: ['#ff6b3d', '#1d1d1f', '#fdf1ec', '#ffc3ad'], experience: ['#30a46c', '#1d1d1f', '#edf8f2', '#a6e0c0'] },
   notebook: { knowledge: ['#8fb0d4', '#4f7aa6', '#fbf6e9', '#e9d9b4'], hobby: ['#e8a598', '#cc6b5c', '#fbf6e9', '#f2d6a2'], experience: ['#a9c49a', '#63895a', '#fbf6e9', '#efd9a8'] },
   pop: { knowledge: ['#3d5afe', '#121212', '#fff4d6', '#ffb300'], hobby: ['#ff4f2e', '#121212', '#ffe6a8', '#3d5afe'], experience: ['#0e9f4f', '#121212', '#fff4d6', '#ff4f2e'] },
-  space: { knowledge: ['#1c1c1c', '#7fa7ff', '#000000', '#3a3a3a'], hobby: ['#1c1c1c', '#ff7a45', '#000000', '#3a3a3a'], experience: ['#1c1c1c', '#8fd694', '#000000', '#3a3a3a'] },
+  space: { knowledge: ['#6b6b6b', '#7fa7ff', '#050505', '#3d3d3d'], hobby: ['#6b6b6b', '#ff7a45', '#050505', '#3d3d3d'], experience: ['#6b6b6b', '#8fd694', '#050505', '#3d3d3d'] },
 };
 // ================= 視覺風格 =================
 const STYLES = [
@@ -76,7 +76,7 @@ const STYLE_FONTS = {
   minimal: 'family=Inter:wght@400;600;700',
   notebook: 'family=LXGW+WenKai+TC:wght@400;700&family=Caveat:wght@600',
   pop: 'family=Bricolage+Grotesque:wght@600;800',
-  space: 'family=Barlow:wght@300;400;500;600',
+  space: 'family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500',
 };
 const curStyle = () => STYLE_NAME[S.style] ? S.style : 'magazine';
 function loadStyleFonts(k) {
@@ -119,7 +119,25 @@ function visual(t, cls = '') {
     g += `<circle cx="${180 + r() * 60}" cy="${90 + r() * 60}" r="${50 + r() * 20}" fill="${b}"/>`;
     g += `<rect x="${40 + r() * 60}" y="${190 + r() * 40}" width="120" height="14" fill="${bg}"/>`;
   }
-  return `<svg class="vis ${cls}" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" role="img" aria-label="${esc(t.title)}的抽象圖"><rect width="400" height="300" fill="${bg}"/>${g}</svg>`;
+  const st = curStyle(), fid = `f-${st}-${t.id}`;
+  let defs = '', body = g;
+  if (st === 'minimal') { // 柔和漸層光暈：不用幾何形狀，三團模糊色塊
+    defs = `<filter id="${fid}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="38"/></filter>`;
+    body = `<g filter="url(#${fid})"><circle cx="${90 + r() * 120}" cy="${80 + r() * 80}" r="${110 + r() * 40}" fill="${a}" opacity=".85"/><circle cx="${240 + r() * 120}" cy="${140 + r() * 100}" r="${100 + r() * 40}" fill="${c}"/><circle cx="${150 + r() * 120}" cy="${230 + r() * 40}" r="${70 + r() * 30}" fill="${b}" opacity=".18"/></g>`;
+  } else if (st === 'notebook') { // 手繪感：邊緣抖動、像水彩疊色
+    defs = `<filter id="${fid}"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="${hash(t.id) % 97}"/><feDisplacementMap in="SourceGraphic" scale="14"/></filter>`;
+    body = `<g filter="url(#${fid})" opacity=".88" style="mix-blend-mode:multiply">${g}</g>`;
+  } else if (st === 'pop') { // 漫畫感：每個形狀加粗黑描邊
+    body = g.replace(/\/>/g, ' stroke="#121212" stroke-width="5"/>');
+  } else if (st === 'space') { // 線框：只留輪廓，加座標格線和準星
+    body = g.replace(/fill="(#[0-9a-f]{6})"( opacity="[^"]*")?/gi, 'fill="none" stroke="$1" stroke-width="1.4"');
+    let grid = '';
+    for (let x = 50; x < 400; x += 50) grid += `<line x1="${x}" y1="0" x2="${x}" y2="300" stroke="#ffffff" stroke-opacity=".07"/>`;
+    for (let y = 50; y < 300; y += 50) grid += `<line x1="0" y1="${y}" x2="400" y2="${y}" stroke="#ffffff" stroke-opacity=".07"/>`;
+    const px = 60 + r() * 280, py = 50 + r() * 200;
+    body = grid + body + `<g stroke="${b}" stroke-width="1.2" fill="none"><circle cx="${px}" cy="${py}" r="10"/><line x1="${px - 22}" y1="${py}" x2="${px + 22}" y2="${py}"/><line x1="${px}" y1="${py - 22}" x2="${px}" y2="${py + 22}"/></g><text x="12" y="288" fill="${b}" font-size="11" font-family="JetBrains Mono, monospace" letter-spacing="2">${String(hash(t.id) % 1000).padStart(3, '0')}.${t.cat.slice(0, 3).toUpperCase()}</text>`;
+  }
+  return `<svg class="vis ${cls}" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" role="img" aria-label="${esc(t.title)}的抽象圖">${defs ? `<defs>${defs}</defs>` : ''}<rect width="400" height="300" fill="${bg}"/>${body}</svg>`;
 }
 
 // ================= 個人化推薦（固定規則） =================
