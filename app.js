@@ -745,7 +745,7 @@ function renderJourney(app) {
       <div class="stylegrid">${STYLES.map(([k, n, d]) => `<button type="button" class="stylepick" data-pick="${k}" aria-pressed="${k === curStyle()}">
         <span class="pv" data-style="${k}"><b>EXPLORE</b><span class="pc"><span class="pt">睡眠的科學</span><span class="pb"><i style="background:var(--k)"></i><i style="background:var(--h)"></i><i style="background:var(--e)"></i></span><span class="pbtn">開始探索</span></span></span>
         <span class="nm"><b>${n}${k === curStyle() ? '・使用中' : ''}</b><span>${d}</span></span></button>`).join('')}</div>
-      <p class="muted small" style="margin-top:10px">登入 Google 後，選好的風格會跟著帳號同步到其他裝置。頂部的 <span aria-hidden="true">◐</span> 按鈕也可以快速輪換。</p>
+      <p class="muted small" style="margin-top:10px">登入 Google 後，選好的風格會跟著帳號同步到其他裝置。頂部的 <span aria-hidden="true">◐</span> 按鈕也可以快速輪換風格，旁邊的調色盤按鈕輪換插圖畫派。</p>
     </section>
     <section class="block settings" id="artbox"><h2 class="sec">插圖畫派</h2>
       <p class="muted small" style="margin-bottom:12px">每個主題都有一幅固定的風景，換畫派就是用不同的畫法重畫同一幅畫。可以和上面的介面風格任意搭配。</p>
@@ -761,7 +761,7 @@ function renderJourney(app) {
   bindStudy(app);
   STYLES.forEach(([k]) => loadStyleFonts(k));
   $$('[data-pick]', app).forEach(b => b.onclick = () => setStyle(b.dataset.pick));
-  $$('[data-art]', app).forEach(b => b.onclick = () => { const k = b.dataset.art; if (k === (curArt() || 'auto')) return; S.art = k; save(); render(); toast(k === 'auto' ? '插圖改回跟隨介面風格。' : `插圖畫派：${ART_NAME[k]}${window.CLOUD?.user ? '，會同步到你的帳號' : ''}`, k === 'auto' ? null : '看首頁', () => location.hash = '#/home'); });
+  $$('[data-art]', app).forEach(b => b.onclick = () => setArt(b.dataset.art));
   renderTree($('#tree'));
   $('#exp').onclick = () => {
     const a = document.createElement('a');
@@ -964,6 +964,12 @@ function renderTree(box) {
 }
 window.addEventListener('resize', () => { const b = $('#tree'); if (b) renderTree(b); });
 
+function setArt(k) {
+  if (!ART_NAME[k] || k === (curArt() || 'auto')) return;
+  S.art = k; save(); render();
+  toast(k === 'auto' ? '插圖：跟隨介面風格' : `插圖畫派：${ART_NAME[k]}${window.CLOUD?.user ? '，會同步到你的帳號' : ''}`);
+}
+$('#artBtn')?.addEventListener('click', () => { const i = ART_SCHOOLS.findIndex(([k]) => k === (curArt() || 'auto')); setArt(ART_SCHOOLS[(i + 1) % ART_SCHOOLS.length][0]); });
 $('#styleBtn')?.addEventListener('click', () => { const i = STYLES.findIndex(([k]) => k === curStyle()); setStyle(STYLES[(i + 1) % STYLES.length][0]); });
 render();
 if (wasReset) toast('EXPLORE 改版了：所有進度已重置，請重新填一次問卷。');
