@@ -12,7 +12,6 @@ const ART_SCHOOLS = [
   ['destijl', '風格派', '只用水平、垂直的黑線和紅黃藍三原色，代表人物是蒙德里安。'],
   ['ukiyoe', '浮世繪', '平塗色塊、清楚的輪廓線、天空由深藍漸淡，代表人物是北齋和廣重。'],
   ['pop', '普普藝術', '借用漫畫和廣告印刷的網點、粗黑框和飽和色，代表人物是李奇登斯坦。'],
-  ['ink', '水墨', '用墨色濃淡和留白表現山水的遠近，近山濃、遠山淡。'],
 ];
 const ART_NAME = Object.fromEntries(ART_SCHOOLS.map(([k, n]) => [k, n]));
 const ART_DESC = Object.fromEntries(ART_SCHOOLS.map(([k, , d]) => [k, d]));
@@ -181,26 +180,6 @@ const ART = {
     o += `<path d="${s.ridgePath(20)}" fill="url(#${id}-c)" stroke="#121212" stroke-width="6" stroke-linejoin="round"/>`;
     o += `<rect y="${s.hy}" width="400" height="${300 - s.hy}" fill="${s.water ? '#1d4ed8' : '#ffe600'}" stroke="#121212" stroke-width="6"/>`;
     if (s.water) for (let k = 0; k < 4; k++) o += `<path d="M${20 + k * 95} ${(s.hy + 26 + (k % 2) * 30).toFixed(0)} q 20 -12 40 0 t 40 0" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>`;
-    return o;
-  },
-  ink(t, s) { // 水墨：遠淡近濃的山、霧、留白、朱印
-    const id = `ink-${t.id}`, r = s.r;
-    let o = `<defs><filter id="${id}-b" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".05" numOctaves="3" seed="${hash(t.id) % 89}"/><feDisplacementMap in="SourceGraphic" scale="9"/><feGaussianBlur stdDeviation="1.4"/></filter>
-      <filter id="${id}-m"><feGaussianBlur stdDeviation="10"/></filter></defs>`;
-    o += `<rect width="400" height="300" fill="#f3efe6"/>`;
-    o += `<circle cx="${s.sun.x.toFixed(0)}" cy="${s.sun.y.toFixed(0)}" r="${(s.sun.r * 0.8).toFixed(0)}" fill="#c8433a" opacity=".55"/>`;
-    const layers = [[0.18, 70, 0.55], [0.38, 40, 0.75], [0.78, 0, 1]];
-    layers.forEach(([op, lift, scale]) => {
-      const pk = Array.from({ length: 3 }, () => ({ cx: r() * 400, w: 40 + r() * 70, h: (50 + r() * 90) * scale }));
-      const base = s.hy - lift + 30;
-      let d = `M0 300 L0 ${base}`;
-      for (let x = 0; x <= 400; x += 8) d += ` L${x} ${(base - Math.max(...pk.map(p => p.h * Math.exp(-(((x - p.cx) / p.w) ** 2))))).toFixed(1)}`;
-      d += ' L400 300Z';
-      o += `<path d="${d}" fill="#1f1d1a" opacity="${op}" filter="url(#${id}-b)"/>`;
-      o += `<rect y="${(base - 6).toFixed(0)}" width="400" height="26" fill="#f3efe6" opacity=".7" filter="url(#${id}-m)"/>`;
-    });
-    if (s.water) for (let k = 0; k < 5; k++) { const y = s.hy + 60 + k * 14, x = r() * 260; o += `<line x1="${x.toFixed(0)}" y1="${y}" x2="${(x + 50 + r() * 90).toFixed(0)}" y2="${y}" stroke="#1f1d1a" stroke-width="1.2" opacity=".35"/>`; }
-    o += `<g transform="translate(${s.sun.x > 200 ? 24 : 346} 238)"><rect width="30" height="30" fill="#b8312f" rx="2"/><text x="15" y="21" text-anchor="middle" font-size="17" font-family="Noto Serif TC, serif" fill="#f3efe6">探</text></g>`;
     return o;
   },
 };
