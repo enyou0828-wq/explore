@@ -4,14 +4,21 @@
 const KEY = 'explore-v1';
 // 重置版本：改這個值，所有使用者下次打開時本機進度都會清空、從問卷重來；雲端的舊資料也不會再被讀回來（見 cloud.js）
 const RESET_ID = '2026-11-21';
-const blank = () => ({ rv: RESET_ID, profile: null, first: null, saved: {}, dismissed: {}, viewed: {}, read: {}, challenges: {}, exps: {}, events: [], daily: null, fresh: [] });
+const READ_V = 2; // 讀完流程改成「小測驗＋用自己的話講」：舊的「我讀完了」紀錄不保留（2026-11-27 使用者決定）
+const blank = () => ({ rv: RESET_ID, readV: READ_V, profile: null, first: null, saved: {}, dismissed: {}, viewed: {}, read: {}, challenges: {}, exps: {}, logs: [], events: [], daily: null, fresh: [] });
+function migrate(d) {
+  const o = Object.assign(blank(), d || {});
+  if ((d || {}).readV !== READ_V) { o.read = {}; o.readV = READ_V; }
+  if (!Array.isArray(o.logs)) o.logs = [];
+  return o;
+}
 let wasReset = false;
 let S = load();
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem(KEY));
     if (d && d.rv !== RESET_ID) { wasReset = !!d.profile; localStorage.removeItem(KEY); return blank(); }
-    return Object.assign(blank(), d || {});
+    return migrate(d);
   } catch { return blank(); }
 }
 // save：使用者做了動作才用，會記下修改時間並觸發雲端同步；persist：自動產生的快取（例如今日推薦），不算修改
@@ -21,7 +28,7 @@ function save() { S.ts = Date.now(); persist(); window.cloudPush?.(); }
 window.EXPLORE = {
   get state() { return S; },
   RESET_ID,
-  replaceState(d) { S = Object.assign(blank(), d); persist(); render(); },
+  replaceState(d) { S = migrate(d); persist(); render(); },
   render: () => render(),
   toast: (...a) => toast(...a),
 };
@@ -87,7 +94,8 @@ const isDone = id => S.read[id] || S.challenges[id]?.finished || S.exps[id]?.don
 // 主題出現在幾個分枝，只要其中一個分枝走到了就能看。已經有進度的主題不會被鎖回去。
 const levelOf = (tag, id) => Math.max(0, LEVELS[tag].findIndex(l => l.includes(id)));
 const layerOpen = (tag, i) => i === 0 || LEVELS[tag][i - 1].some(id => isDone(id));
-function hasProgress(id) { return !!(S.viewed[id] || S.saved[id] || S.challenges[id] || S.exps[id] || S.read[id]); }
+function hasProgress(id) { return !!(S.viewed[id] || S.saved[id] || S.challenges[id] || S.exps[id] || S.read[id] || logsOf(id).length); }
+const logsOf = id => S.logs.filter(l => l.topic === id);
 function unlocked(id) { return hasProgress(id) || T[id].tags.some(g => LEVELS[g] && layerOpen(g, levelOf(g, id))); }
 // 還沒解鎖時：找最接近的一條路（需要的層數最淺的分枝），告訴使用者先完成哪幾個
 function unlockPath(id) {
@@ -218,7 +226,9 @@ function render() {
   window.cloudPaint?.();
 }
 function setNav(p) { $$('.nav a').forEach(a => a.setAttribute('aria-current', a.dataset.p === p ? 'page' : 'false')); }
-window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+let scrollTarget = null; // 換頁後要捲到的區塊 id（例如 #study），沒有就回到頂端
+const goTo = (hash, target) => { scrollTarget = target; if (location.hash === hash) { render(); $('#' + target)?.scrollIntoView(); scrollTarget = null; } else location.hash = hash; };
+window.addEventListener('hashchange', () => { render(); const el = scrollTarget && $('#' + scrollTarget); scrollTarget = null; el ? el.scrollIntoView() : window.scrollTo(0, 0); });
 
 // ================= 首次問卷 =================
 const QS = [
@@ -276,6 +286,7 @@ function renderHome(app) {
       <p class="lede">今天為你挑了 ${ids.length} 個值得認識的東西。</p>
     </section>
     ${going.length ? `<section class="strip"><h2 class="sec">進行中的挑戰</h2>${going.map(([id, c]) => { const n = Object.values(c.days || {}).filter(x => x.done).length; return `<a class="mini" href="#/challenge/${id}"><b>${esc(T[id].title)}</b><span>${n}/7 天</span><span class="bar"><i style="width:${n / 7 * 100}%"></i></span></a>`; }).join('')}</section>` : ''}
+    ${digCard()}
     <section>
       <h2 class="sec">Today's Discovery</h2>
       <div class="feature">${ids.map((id, i) => card(T[id], { why: true, big: i === 0 })).join('')}</div>
@@ -284,6 +295,8 @@ function renderHome(app) {
     ${(() => { const sv = Object.keys(S.saved).filter(id => T[id] && !isDone(id) && !ids.includes(id)).sort((a, b) => S.saved[b].localeCompare(S.saved[a])); return sv.length ? `<section class="block"><h2 class="sec">我的收藏・還沒完成</h2><div class="grid three">${sv.slice(0, 6).map(id => card(T[id])).join('')}</div>${sv.length > 6 ? `<p class="muted small">還有 ${sv.length - 6} 個，在「我的旅程」看全部。</p>` : ''}</section>` : ''; })()}
     <section class="more"><a class="btn" href="#/discover">看更多主題 →</a></section>`;
   bindCards(app);
+  bindStudy(app);
+  $$('[data-gostudy]', app).forEach(b => b.onclick = () => goTo(`#/topic/${b.dataset.gostudy}`, 'study'));
 }
 
 // ================= 探索 =================
@@ -387,6 +400,7 @@ function renderTopic(app, id) {
         ${t.reads?.length ? `<div class="books">${t.reads.map(b => `<div class="book"><span class="spine"></span><div><h3>${esc(b.t)}</h3><p class="author">${esc(b.a)}</p><p>${esc(b.w)}</p></div></div>`).join('')}</div>` : ''}
         ${t.practice?.length ? `<h3 class="subhead">動手練習</h3><ol class="practice">${t.practice.map(p => `<li>${esc(p)}</li>`).join('')}</ol>` : ''}
       </section>` : ''}
+      ${studySection(t)}
       <section class="block" id="related"><h2 class="sec">相關主題</h2>
         <div class="grid three">${rel.map(r => card(r)).join('')}</div>
         ${S.moreRel === id ? (more.length ? `<h2 class="sec" style="margin-top:28px">再延伸一點</h2><div class="grid three">${more.map(r => card(r)).join('')}</div>` : '<p class="muted">已經沒有更遠的相關主題了。</p>') : `<button class="btn" id="moreRel" style="margin-top:16px">✦ 找更多相關主題</button>`}
@@ -395,7 +409,8 @@ function renderTopic(app, id) {
   $('#saveT').onclick = () => { toggleSave(id); render(); };
   $('#moreRel')?.addEventListener('click', () => { S.moreRel = id; save(); render(); $('#related').scrollIntoView(); });
   $$('[data-act="start"]', app).forEach(b => b.onclick = () => { S.challenges[id] = { start: today(), days: {} }; log('challenge', id); save(); location.hash = `#/challenge/${id}`; });
-  $$('[data-act="read"]', app).forEach(b => b.onclick = () => openReflect('knowledge', id));
+  $$('[data-act="read"]', app).forEach(b => b.onclick = () => openQuiz(id));
+  bindStudy(app, id);
   $$('[data-step]', app).forEach(c => c.onchange = () => {
     const e = S.exps[id] = S.exps[id] || { steps: [] };
     e.steps[+c.dataset.step] = c.checked; if (!e.started) { e.started = today(); log('exp', id); } save(); render(); $('#do').scrollIntoView();
@@ -408,14 +423,14 @@ function renderTopic(app, id) {
 function reflectionForm(kind) {
   return `<form class="reflect" data-kind="${kind}">
     <h3>${kind === 'challenge' ? '完成挑戰' : kind === 'exp' ? '完成這個體驗' : '讀完了'}</h3>
-    <label>${kind === 'knowledge' ? '一句話記下你學到的事（選填）' : '心得：印象最深的是什麼？下次想怎麼做？'}<textarea name="text" rows="3" maxlength="600"></textarea></label>
+    <label>${kind === 'knowledge' ? '如果要跟朋友解釋這個主題，你會怎麼講？用自己的話寫兩三句（選填）' : '心得：印象最深的是什麼？下次想怎麼做？'}<textarea name="text" rows="${kind === 'knowledge' ? 4 : 3}" maxlength="600" ${kind === 'knowledge' ? 'placeholder="例如：其實就是……，最重要的是……"' : ''}></textarea></label>
     <div class="rate" role="radiogroup" aria-label="喜歡程度">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="rate" value="${n}" ${n === 4 ? 'checked' : ''}><span>${'★'.repeat(n)}</span></label>`).join('')}</div>
     <button class="btn primary" type="submit">完成</button>
   </form>`;
 }
 function reflectionView(r) {
   if (!r || (!r.text && !r.rate)) return '';
-  return `<blockquote class="refl">${r.text ? esc(r.text) : ''}<footer>${r.rate ? '★'.repeat(r.rate) : ''} · ${md(r.date || today())}</footer></blockquote>`;
+  return `<blockquote class="refl">${r.text ? esc(r.text) : ''}<footer>${r.rate ? '★'.repeat(r.rate) : ''}${r.quiz ? ` · 小測驗 ${r.quiz.ok}/${r.quiz.n}` : ''} · ${md(r.date || today())}</footer></blockquote>`;
 }
 function bindReflect(root, kind, id) {
   $$('form.reflect', root).forEach(f => f.onsubmit = e => {
@@ -425,10 +440,10 @@ function bindReflect(root, kind, id) {
     const before = new Set(TOPICS.filter(x => unlocked(x.id)).map(x => x.id));
     if (f.dataset.kind === 'exp') { Object.assign(S.exps[id], r, { done: true }); log('expdone', id, r.text); }
     if (f.dataset.kind === 'challenge') { Object.assign(S.challenges[id], r, { finished: today() }); log('chdone', id, r.text); }
-    if (f.dataset.kind === 'knowledge') { S.read[id] = r; log('read', id, r.text); closeModal(); }
+    if (f.dataset.kind === 'knowledge') { S.read[id] = Object.assign(r, { quiz: quizScore }); log('read', id, r.text); closeModal(); }
     save(); render();
     const opened = TOPICS.filter(x => !before.has(x.id) && unlocked(x.id));
-    const base = f.dataset.kind === 'knowledge' ? '記下來了，已加入你的旅程。' : '恭喜完成！已加入你的旅程。';
+    const base = f.dataset.kind === 'knowledge' ? '記下來了。想再挖深一點，下面有延伸閱讀，自己去學了也可以記一筆。' : '恭喜完成！已加入你的旅程。';
     if (opened.length) toast(`${base}解鎖了 ${opened.length} 個新主題：${opened.slice(0, 3).map(x => '「' + x.title + '」').join('')}${opened.length > 3 ? '等' : ''}。`, '看技能樹', () => location.hash = '#/journey');
     else toast(base, '看我的旅程', () => location.hash = '#/journey');
   });
@@ -441,6 +456,144 @@ function openReflect(kind, id) {
   bindReflect(m, kind, id);
 }
 function closeModal() { $('#modal').hidden = true; $('#modal').innerHTML = ''; }
+
+// ================= 讀完小測驗（知識類）：3 題、不設門檻、可跳過，接著用自己的話講一次 =================
+let quizScore = null;
+function shuffled(arr, seed) { const r = rng(seed), a = arr.map((x, i) => [x, i]); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function openQuiz(id) {
+  const qs = QUIZ[id];
+  quizScore = null;
+  if (!qs) { openReflect('knowledge', id); return; }
+  const m = $('#modal'), seed = hash(id + Date.now());
+  let i = 0, ok = 0;
+  const step = () => {
+    const [q, opts, ex] = qs[i];
+    const order = shuffled(opts, seed + i);
+    m.innerHTML = `<div class="sheet quiz">
+      <p class="kicker"><span class="cat">QUIZ</span><span>${esc(T[id].title)}・第 ${i + 1} / ${qs.length} 題</span></p>
+      <h3>${esc(q)}</h3>
+      <div class="qopts">${order.map(([o, k]) => `<button type="button" class="qopt" data-k="${k}">${esc(o)}</button>`).join('')}</div>
+      <div class="qex" hidden></div>
+      <div class="row qnav"><button class="linkbtn" id="qskip">跳過測驗</button><button class="btn primary" id="qnext" hidden>${i + 1 < qs.length ? '下一題' : '看結果'}</button></div>
+    </div>`;
+    m.hidden = false;
+    $$('.qopt', m).forEach(b => b.onclick = () => {
+      const right = b.dataset.k === '0';
+      if (right) ok++;
+      $$('.qopt', m).forEach(x => { x.disabled = true; if (x.dataset.k === '0') x.classList.add('right'); });
+      if (!right) b.classList.add('wrong');
+      const e = $('.qex', m); e.hidden = false; e.innerHTML = `<b>${right ? '答對了' : '再想想'}</b>　${esc(ex)}`;
+      $('#qnext', m).hidden = false; $('#qnext', m).focus();
+    });
+    $('#qnext', m).onclick = () => { i++; i < qs.length ? step() : done(); };
+    $('#qskip', m).onclick = () => { quizScore = null; openReflect('knowledge', id); };
+  };
+  const done = () => {
+    quizScore = { ok, n: qs.length };
+    m.innerHTML = `<div class="sheet quiz"><p class="kicker"><span class="cat">QUIZ</span><span>${esc(T[id].title)}</span></p>
+      <h3>答對 ${ok} / ${qs.length} 題</h3>
+      <p class="muted">${ok === qs.length ? '重點都抓到了。' : '沒關係，答錯的地方正好是值得再看一次的地方。'}最後一步：試著用自己的話講一次，講得出來才是真的懂。</p>
+      <button class="btn primary" id="qgo">用自己的話講一次</button></div>`;
+    $('#qgo', m).onclick = () => openReflect('knowledge', id);
+  };
+  step();
+}
+
+// ================= 延伸學習與自學紀錄 =================
+const KW = { sleep: '睡眠', microbiome: '腸道菌叢', bauhaus: '包浩斯', compound: '複利', memory: '記憶 心理學', llm: '大型語言模型', cooking: '家常菜 做法', running: '跑步 新手', python: 'Python 入門', bouldering: '抱石', plants: '室內植物 照顧', museum: '台中 博物館', neighborhood: '台中 老街 散步', photowalk: '街頭攝影', sunrise: '日出', market: '傳統市場', detox: '數位排毒', concert: '現場演出', hiking: '台中 郊山', stargaze: '觀星 入門', volunteer: '志工', stoic: '斯多葛主義', habit: '習慣 養成', filmlang: '電影語言 鏡頭', weather: '氣象學', index: '指數基金', hero: '英雄旅程 坎伯', wabisabi: '侘寂', strength: '重量訓練 入門', swim: '游泳 入門', writing: '寫作 練習', video: '手機 影片剪輯', piano: '鋼琴 入門', bread: '麵包 做法', basketball: '籃球 基本動作', cycling: '單車 路線', camping: '露營 新手', solotrip: '一個人旅行', pottery: '陶藝', usedbooks: '二手書店', letter: '手寫信', bookclub: '讀書會', sunset: '夕陽', movie: '電影 推薦', botanic: '植物 辨識', etymology: '英文字根', chinesechar: '漢字 演變', rock: '搖滾樂 歷史', hiphop: '嘻哈 歷史', soundsci: '泛音 音律', linguistics: '語言相對論', platform: '平台經濟', marketing: '品牌行銷', coffeechain: '咖啡 供應鏈', inflation: '通貨膨脹 利率', beatmaking: 'beat 製作', lyrics: '英文歌詞 學英文', english: '英文口說 練習', calligraphy: '書法 入門', origbook: '英文原文書 推薦', arduino: 'Arduino 入門', website: '個人網站 製作', lightroom: 'Lightroom 修圖', mealprep: '備餐', budget: '記帳 預算', badminton: '羽球 入門', sportmeal: '增肌 飲食', dance: '舞蹈 入門', album: '經典專輯', poetry: '現代詩', foreignmenu: '外語 點餐', roadrace: '5K 路跑 訓練', baseball: '中華職棒', nightmarket: '夜市 小吃', marketstall: '市集 擺攤', cookingclass: '料理課', teatasting: '品茶 入門' };
+const kwOf = t => KW[t.id] || t.title;
+const STUDY_TYPES = [['book', '讀書'], ['video', '看影片'], ['article', '讀文章'], ['practice', '實作'], ['outing', '出門'], ['talk', '跟人聊']];
+const STYPE = Object.fromEntries(STUDY_TYPES);
+const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ` ${m % 60} 分` : ''}` : `${m} 分鐘`;
+const safeUrl = u => /^https?:\/\/[^\s]+$/i.test(u || '') ? u : '';
+function searchLinks(t) {
+  const q = encodeURIComponent(kwOf(t));
+  const links = [['維基百科', `https://zh.wikipedia.org/w/index.php?search=${q}`], ['YouTube', `https://www.youtube.com/results?search_query=${q}`], ['Google', `https://www.google.com/search?q=${q}`]];
+  if (t.cat === 'knowledge') links.push(['Google 學術', `https://scholar.google.com/scholar?q=${q}`]);
+  return links.map(([n, u]) => `<a class="btn ghost" href="${u}" target="_blank" rel="noopener noreferrer">${n} ↗</a>`).join('');
+}
+function logItem(l, withTopic) {
+  const u = safeUrl(l.url);
+  return `<li class="slog">
+    <p class="kicker"><span class="cat">${esc(STYPE[l.type] || '自學')}</span><span>${md(l.date)}</span><span>${fmtMin(l.min)}</span>${withTopic && T[l.topic] ? `<a href="#/topic/${l.topic}">${esc(T[l.topic].title)}</a>` : ''}</p>
+    ${l.text ? `<p class="stext">${esc(l.text)}</p>` : ''}
+    ${u ? `<p class="small"><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(u.replace(/^https?:\/\//, '').slice(0, 60))} ↗</a></p>` : ''}
+    <button class="linkbtn" data-editlog="${l.id}">編輯</button>
+  </li>`;
+}
+function studySection(t) {
+  const mine = logsOf(t.id).slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  const n = Math.min(2, mine.length);
+  return `<section class="block study" id="study"><h2 class="sec">自己再挖深一點</h2>
+    <p class="muted">讀完簡介只是開始。挑一個方向自己找下去：讀一本上面的書、看一支影片、動手做一次練習。${n < 2 ? `學完回來記一筆，技能樹這個主題會再亮一格（目前自學 ${n}/2）。` : '學完回來記一筆，就會累積到你的自學時數（這個主題的自學點數已滿 2/2）。'}</p>
+    <h3 class="subhead">從這裡找下去</h3>
+    <div class="actions">${searchLinks(t)}</div>
+    <h3 class="subhead">我的自學紀錄${mine.length ? `・${mine.length} 筆、共 ${fmtMin(mine.reduce((s, l) => s + l.min, 0))}` : ''}</h3>
+    ${mine.length ? `<ul class="slogs">${mine.map(l => logItem(l, false)).join('')}</ul>` : '<p class="muted small">還沒有紀錄。</p>'}
+    <div class="actions" style="margin-top:12px"><button class="btn primary" data-newlog="${t.id}">＋ 我自己去學了</button></div>
+  </section>`;
+}
+function bindStudy(root, topic) {
+  $$('[data-newlog]', root).forEach(b => b.onclick = () => openLog({ topic: b.dataset.newlog || topic || '' }));
+  $$('[data-editlog]', root).forEach(b => b.onclick = () => openLog(S.logs.find(l => l.id === b.dataset.editlog)));
+}
+function topicOptions(sel) {
+  const ok = TOPICS.filter(t => unlocked(t.id) || t.id === sel);
+  return Object.keys(CATS).map(c => `<optgroup label="${CATS[c].zh}">${ok.filter(t => t.cat === c).map(t => `<option value="${t.id}" ${t.id === sel ? 'selected' : ''}>${esc(t.title)}</option>`).join('')}</optgroup>`).join('');
+}
+function openLog(l) {
+  if (!l) return;
+  const editing = !!l.id;
+  const m = $('#modal');
+  m.innerHTML = `<form class="sheet logform" novalidate>
+    <h3>${editing ? '編輯自學紀錄' : '我自己去學了'}</h3>
+    <label class="field">主題<select name="topic" required><option value="">選一個主題</option>${topicOptions(l.topic)}</select></label>
+    <fieldset class="field"><legend>怎麼學的</legend><div class="opts chips">${STUDY_TYPES.map(([v, n], i) => `<label class="opt"><input type="radio" name="type" value="${v}" ${(l.type || 'book') === v ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div></fieldset>
+    <label class="field">花了幾分鐘<input type="number" name="min" min="1" max="600" step="1" inputmode="numeric" value="${l.min || 30}" required></label>
+    <label class="field">學到什麼、做了什麼<textarea name="text" rows="4" maxlength="800" placeholder="例如：看完一支講黑洞影像的影片，原來那個亮環是……" required>${esc(l.text || '')}</textarea></label>
+    <label class="field">連結（選填，文章或影片網址）<input type="url" name="url" maxlength="500" placeholder="https://" value="${esc(l.url || '')}"></label>
+    <p class="err" id="logerr" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">${editing ? '儲存' : '記下來'}</button><button class="linkbtn" type="button" id="lcancel">取消</button>${editing ? '<button class="btn danger" type="button" id="ldel">刪除</button>' : ''}</div>
+  </form>`;
+  m.hidden = false;
+  const f = $('form', m);
+  $('#lcancel', m).onclick = closeModal;
+  if (editing) { const d = $('#ldel', m); let armed = false; d.onclick = () => { if (!armed) { armed = true; d.textContent = '再按一次確認刪除'; setTimeout(() => { armed = false; d.textContent = '刪除'; }, 3000); return; } S.logs = S.logs.filter(x => x.id !== l.id); save(); closeModal(); render(); toast('已刪除這筆紀錄。'); }; }
+  f.onsubmit = e => {
+    e.preventDefault();
+    const fd = new FormData(f);
+    const topic = String(fd.get('topic') || ''), min = Math.round(+fd.get('min')), text = String(fd.get('text') || '').trim(), url = String(fd.get('url') || '').trim();
+    const miss = [];
+    if (!T[topic]) miss.push('主題'); if (!(min >= 1 && min <= 600)) miss.push('分鐘（1–600）'); if (!text) miss.push('學到什麼');
+    if (url && !safeUrl(url)) miss.push('連結要以 http:// 或 https:// 開頭');
+    if (miss.length) { const el = $('#logerr', m); el.hidden = false; el.textContent = `請確認：${miss.join('、')}`; return; }
+    const rec = { topic, type: String(fd.get('type') || 'book'), min, text, url, date: l.date || today() };
+    const before = pts(T[topic]);
+    if (editing) Object.assign(S.logs.find(x => x.id === l.id), rec);
+    else { S.logs.push(Object.assign(rec, { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) })); log('study', topic, text); if (!S.viewed[topic]) S.viewed[topic] = today(); }
+    save(); closeModal(); render();
+    if (editing) { toast('已更新。'); return; }
+    const gain = pts(T[topic]) - before;
+    const total = S.logs.reduce((s, x) => s + x.min, 0);
+    toast(`記下來了！累積自學 ${fmtMin(total)}${gain > 0 ? `，「${T[topic].title}」技能樹 +${gain}` : ''}。`, '看我的紀錄', () => goTo('#/journey', 'studylog'));
+  };
+}
+// 首頁「接著挖深」：挑一個完成了、但還沒有自學紀錄滿 2 筆的主題，附一個具體的下一步，每天換一個
+function digCard() {
+  const cand = TOPICS.filter(t => isDone(t.id) && logsOf(t.id).length < 2);
+  if (!cand.length) return '';
+  const r = rng(hash(today() + 'dig'));
+  const pick = cand.sort((a, b) => (logsOf(a.id).length - logsOf(b.id).length) || (hash(today() + a.id) - hash(today() + b.id)))[0];
+  const ideas = [...(pick.reads || []).map(b => `讀讀看${b.t}（${b.a}）：${b.w}`), ...(pick.practice || []), ...pick.next];
+  const idea = ideas[Math.floor(r() * ideas.length)];
+  return `<section class="block dig"><h2 class="sec">接著挖深</h2>
+    <div class="digcard cat-${pick.cat}"><span class="ticon">${icon(pick.id, 30)}</span><div>
+      <p class="kicker"><span class="cat">${CATS[pick.cat].en}</span><span>你已經完成了這個主題</span><span>自學 ${logsOf(pick.id).length}/2</span></p>
+      <h3><a href="#/topic/${pick.id}">${esc(pick.title)}</a></h3>
+      <p>今天可以試試：${esc(idea)}</p>
+      <div class="actions"><button class="btn primary" data-newlog="${pick.id}">＋ 學完記一筆</button><button class="btn" data-gostudy="${pick.id}">找延伸資料</button></div>
+    </div></div></section>`;
+}
 
 // ================= Hobby Starter：七天挑戰 =================
 function renderChallenge(app, id) {
@@ -482,7 +635,7 @@ function renderChallenge(app, id) {
 }
 
 // ================= My Journey =================
-const EV = { undismiss: '放回了', start: '開始了 EXPLORE', view: '探索了', save: '收藏了', challenge: '開始七天挑戰：', day: '完成', chdone: '完成挑戰：', exp: '開始體驗：', expdone: '完成體驗：', read: '讀完了', shuffle: '抽了一次新發現', dismiss: '略過了', profile: '更新了興趣設定', quit: '放棄挑戰：' };
+const EV = { undismiss: '放回了', start: '開始了 EXPLORE', view: '探索了', save: '收藏了', challenge: '開始七天挑戰：', day: '完成', chdone: '完成挑戰：', exp: '開始體驗：', expdone: '完成體驗：', read: '讀完了', shuffle: '抽了一次新發現', dismiss: '略過了', profile: '更新了興趣設定', quit: '放棄挑戰：', study: '自學了' };
 function renderJourney(app) {
   const viewed = Object.keys(S.viewed);
   const catN = c => viewed.filter(id => T[id]?.cat === c).length;
@@ -492,7 +645,11 @@ function renderJourney(app) {
   const notes = [];
   Object.entries(S.challenges).forEach(([id, c]) => Object.entries(c.days || {}).forEach(([n, d]) => d.note && notes.push({ id, where: `七天挑戰 · 第 ${n} 天`, text: d.note })));
   [...finishedCh, ...doneEx].forEach(([id, r]) => r.text && notes.push({ id, where: '心得', text: r.text }));
-  Object.entries(S.read).forEach(([id, r]) => r.text && notes.push({ id, where: '讀後一句話', text: r.text }));
+  Object.entries(S.read).forEach(([id, r]) => r.text && notes.push({ id, where: '用自己的話講', text: r.text }));
+  const totalMin = S.logs.reduce((s, l) => s + l.min, 0);
+  const weekAgo = fmt(new Date(Date.now() - 6 * 86400000));
+  const weekMin = S.logs.filter(l => l.date >= weekAgo).reduce((s, l) => s + l.min, 0);
+  const slog = S.logs.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   const activeDays = new Set(S.events.map(e => e.d.slice(0, 10))).size;
   const evs = S.events.filter(e => !['shuffle', 'unsave'].includes(e.type)).slice().reverse().slice(0, 60);
   const groups = {};
@@ -508,8 +665,13 @@ function renderJourney(app) {
       <div><b>${Object.keys(S.saved).length}</b><span>收藏</span></div>
       <div><b>${finishedCh.length}</b><span>完成的挑戰</span></div>
       <div><b>${doneEx.length}</b><span>完成的體驗</span></div>
-      <div><b>${notes.length}</b><span>筆記與心得</span></div>
+      <div><b>${(totalMin / 60).toFixed(totalMin && totalMin < 600 ? 1 : 0)}</b><span>自學小時</span></div>
       <div><b>${activeDays}</b><span>活躍天數</span></div>
+    </section>
+    <section class="block study" id="studylog"><h2 class="sec">我的學習紀錄</h2>
+      <div class="sstats"><div><b>${S.logs.length}</b><span>自學筆數</span></div><div><b>${fmtMin(totalMin)}</b><span>累積時間</span></div><div><b>${fmtMin(weekMin)}</b><span>最近 7 天</span></div><div><b>${new Set(S.logs.map(l => l.topic)).size}</b><span>延伸過的主題</span></div></div>
+      <div class="actions" style="margin:14px 0"><button class="btn primary" data-newlog="">＋ 記一筆自學</button></div>
+      ${slog.length ? `<ul class="slogs">${slog.map(l => logItem(l, true)).join('')}</ul>` : '<p class="muted">讀完一個主題後，自己去找書、看影片、動手做，回來記一筆，就會出現在這裡。</p>'}
     </section>
     <section class="block tree-block"><h2 class="sec">技能樹</h2>
       <div id="tree"></div>
@@ -526,6 +688,7 @@ function renderJourney(app) {
     </section>
     <section class="block settings" id="acctBox"><h2 class="sec">帳號與同步</h2><div data-acct="settings"></div></section>`;
   bindCards(app);
+  bindStudy(app);
   renderTree($('#tree'));
   $('#exp').onclick = () => {
     const a = document.createElement('a');
@@ -534,20 +697,22 @@ function renderJourney(app) {
   };
   $('#imp').onchange = e => {
     const f = e.target.files[0]; if (!f) return;
-    f.text().then(txt => { try { const d = JSON.parse(txt); if (!d.profile) throw new Error('不是 EXPLORE 的備份檔'); S = Object.assign(blank(), d); save(); render(); toast('匯入完成'); } catch (err) { toast('匯入失敗：' + err.message); } });
+    f.text().then(txt => { try { const d = JSON.parse(txt); if (!d.profile) throw new Error('不是 EXPLORE 的備份檔'); S = migrate(d); save(); render(); toast('匯入完成'); } catch (err) { toast('匯入失敗：' + err.message); } });
   };
   const w = $('#wipe'); let armed = false;
   w.onclick = () => { if (!armed) { armed = true; w.textContent = '再按一次確認清除'; setTimeout(() => { armed = false; w.textContent = '清除所有資料'; }, 3000); return; } S = blank(); save(); location.hash = '#/home'; render(); };
 }
 
 // ================= 技能樹 =================
-// 每個節點 5 點：看過 1、收藏 1、完成 3（嗜好：挑戰每 2 天 1 點；體驗：每完成一步 1 點）
+// 每個節點 7 點：看過 1、收藏 1、完成 3（嗜好：挑戰每 2 天 1 點；體驗：每完成一步 1 點）、自學紀錄每筆 1（最多 2）
 function donePts(t) {
   if (t.cat === 'knowledge') return S.read[t.id] ? 3 : 0;
   if (t.cat === 'hobby') { const c = S.challenges[t.id]; if (!c) return 0; if (c.finished) return 3; return Math.min(3, Math.floor(Object.values(c.days || {}).filter(d => d.done).length / 2)); }
   const e = S.exps[t.id]; if (!e) return 0; return e.done ? 3 : Math.min(3, (e.steps || []).filter(Boolean).length);
 }
-const pts = t => (S.viewed[t.id] ? 1 : 0) + (S.saved[t.id] ? 1 : 0) + donePts(t);
+const logPts = t => Math.min(2, logsOf(t.id).length);
+const MAXPTS = 7;
+const pts = t => (S.viewed[t.id] ? 1 : 0) + (S.saved[t.id] ? 1 : 0) + donePts(t) + logPts(t);
 // 16 個興趣分枝：一個主題有幾個興趣標籤，就出現在幾個分枝（點數共用）
 const BRANCH_ORDER = ['sci', 'tech', 'biz', 'psych', 'phil', 'lang', 'hist', 'art', 'photo', 'media', 'music', 'craft', 'food', 'health', 'sport', 'nature'];
 const BRANCH_COL = { sci: '#2f5d8a', tech: '#4a6fa5', biz: '#7a6a2f', psych: '#8a4f7d', phil: '#5b4b8a', lang: '#3d7f8c', hist: '#8c5a3c', art: '#b4532a', photo: '#c47f2c', media: '#a33f4f', music: '#b05f8a', craft: '#8f6e4a', food: '#c0632f', health: '#4f8a5b', sport: '#2f7f6f', nature: '#55632b' };
@@ -655,11 +820,11 @@ function nodeSvg(tag, t, p, col, dim) {
   const T = buildTree()[tag];
   const n = pts(t);
   const locked = !unlocked(t.id);
-  const st = n >= 5 ? 'full' : n > 0 ? 'part' : locked ? 'locked' : 'open';
-  return `<g class="node ${st} ${treeSel === t.id ? 'sel' : ''} ${dim ? 'dim' : ''}" data-node="${t.id}" tabindex="0" role="button" aria-label="${esc(INT[tag])}：${esc(t.title)}，${n}/5" style="--c:${col}" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})">
+  const st = n >= MAXPTS ? 'full' : n > 0 ? 'part' : locked ? 'locked' : 'open';
+  return `<g class="node ${st} ${treeSel === t.id ? 'sel' : ''} ${dim ? 'dim' : ''}" data-node="${t.id}" tabindex="0" role="button" aria-label="${esc(INT[tag])}：${esc(t.title)}，${n}/${MAXPTS}" style="--c:${col}" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})">
     <circle r="21" class="ring"/>
     <g transform="translate(-10.5 -10.5)" class="ic">${icon(t.id, 21).replace('<svg ', '<svg x="0" y="0" ')}</g>
-    <g transform="translate(0 30)"><rect x="-14" y="-7.5" width="28" height="15" rx="7.5" class="badge"/><text y="4" text-anchor="middle">${n}/5</text></g>
+    <g transform="translate(0 30)"><rect x="-14" y="-7.5" width="28" height="15" rx="7.5" class="badge"/><text y="4" text-anchor="middle">${n}/${MAXPTS}</text></g>
     ${locked ? `<g transform="translate(-22 12)" class="lock"><rect x="-5" y="-2" width="10" height="8" rx="1.5"/><path d="M-3 -2v-2a3 3 0 0 1 6 0v2" fill="none"/></g>` : ''}
     <title>${esc(INT[tag])}・${esc(t.title)}</title>
   </g>`;
@@ -711,9 +876,9 @@ function renderTree(box) {
   box.innerHTML = `
     ${narrow ? `<div class="row treebar">${treeFocus ? '<button class="btn" id="treeAll">← 回到全部分枝</button>' : ''}<label class="field treepick">分枝<select id="brsel">${BRANCH_ORDER.map(t => `<option value="${t}" ${t === treeBranch ? 'selected' : ''}>${INT[t]}${mine.has(t) ? ' ★' : ''}（${branchPts(t)} 點）</option>`).join('')}</select></label></div>` : ''}
     <div class="treewrap"><svg viewBox="${vb}" class="tree ${narrow ? 'focus' : 'radial'}" role="group" aria-label="技能樹">${lines.join('')}${nodes.join('')}${hubs.join('')}</svg></div>
-    <div class="treelegend"><span><i class="lg full"></i>5/5 完成</span><span><i class="lg part"></i>進行中</span><span><i class="lg open"></i>可以探索</span><span><i class="lg locked"></i>尚未解鎖</span><span class="muted">由內往外：入門 → 基礎 → 進階 → 深入，上一層完成一個就解鎖下一層・看過 +1、收藏 +1、完成 +3・${narrow ? '★ 是你選的興趣' : '淡色分枝是還沒選、也還沒探索的領域・點分枝中心可以放大'}</span></div>
-    <div class="treeinfo">${sel ? (() => { const n = pts(sel), d = donePts(sel); return `<div class="tsel cat-${sel.cat}"><span class="ticon">${icon(sel.id, 26)}</span><div><p class="kicker"><span class="cat">${CATS[sel.cat].en}</span><span>${n}/5</span><span>${sel.tags.map(g => INT[g]).join('・')}</span></p><h3>${esc(sel.title)}</h3>
-      <ul class="pts"><li class="${S.viewed[sel.id] ? 'ok' : ''}">看過 +1</li><li class="${S.saved[sel.id] ? 'ok' : ''}">收藏 +1</li><li class="${d ? 'ok' : ''}">${sel.cat === 'knowledge' ? '讀完' : sel.cat === 'hobby' ? '七天挑戰' : '完成體驗'} +${d}/3</li></ul>
+    <div class="treelegend"><span><i class="lg full"></i>7/7 滿點</span><span><i class="lg part"></i>進行中</span><span><i class="lg open"></i>可以探索</span><span><i class="lg locked"></i>尚未解鎖</span><span class="muted">由內往外：入門 → 基礎 → 進階 → 深入，上一層完成一個就解鎖下一層・看過 +1、收藏 +1、完成 +3、自學紀錄 +2・${narrow ? '★ 是你選的興趣' : '淡色分枝是還沒選、也還沒探索的領域・點分枝中心可以放大'}</span></div>
+    <div class="treeinfo">${sel ? (() => { const n = pts(sel), d = donePts(sel); return `<div class="tsel cat-${sel.cat}"><span class="ticon">${icon(sel.id, 26)}</span><div><p class="kicker"><span class="cat">${CATS[sel.cat].en}</span><span>${n}/${MAXPTS}</span><span>${sel.tags.map(g => INT[g]).join('・')}</span></p><h3>${esc(sel.title)}</h3>
+      <ul class="pts"><li class="${S.viewed[sel.id] ? 'ok' : ''}">看過 +1</li><li class="${S.saved[sel.id] ? 'ok' : ''}">收藏 +1</li><li class="${d ? 'ok' : ''}">${sel.cat === 'knowledge' ? '讀完' : sel.cat === 'hobby' ? '七天挑戰' : '完成體驗'} +${d}/3</li><li class="${logPts(sel) ? 'ok' : ''}">自學紀錄 +${logPts(sel)}/2</li></ul>
       ${unlocked(sel.id) ? `<a class="btn primary" href="#/topic/${sel.id}">前往主題</a>` : `<p class="lockline">🔒 ${esc(unlockHint(sel.id))}</p>`}</div></div>`; })() : '<p class="muted">點一個節點看詳細進度。</p>'}</div>`;
   $$('[data-node]', box).forEach(g => {
     const pick = () => { treeSel = g.dataset.node; renderTree(box); };
